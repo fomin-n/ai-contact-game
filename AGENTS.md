@@ -1,0 +1,237 @@
+# AGENTS.md
+
+This file is the agent-facing operating guide for `ai-contact-game`. Keep `README.md` concise for humans; put detailed implementation context here.
+
+## Project Overview
+
+`ai-contact-game` is a small full-stack LLM-agent game inspired by the Russian word game "Есть контакт" / "Contact".
+
+The observer starts a game from the web UI. Three AI roles then play automatically:
+
+- `Word Master`: chooses and knows the secret word, reveals prefixes, and tries to intercept player clues.
+- `Player A` and `Player B`: do not know the secret word. They only know the current prefix, public message history, used words, language, and their own personality text.
+
+The frontend is observer-only. All game rules, prompts, LLM calls, state transitions, validation, and deterministic word comparison belong on the Python backend.
+
+## Repository Structure
+
+- `backend/app/main.py`: FastAPI app and REST routes.
+- `backend/app/game.py`: backend-owned game state, loop, turn transitions, visible message timing, finish/error handling.
+- `backend/app/agents.py`: LLM task helpers, validation, retry/repair behavior.
+- `backend/app/word_utils.py`: deterministic normalization and word comparison.
+- `backend/app/config.py`: provider/model configuration from environment variables.
+- `backend/app/event_log.py`: JSONL event logging with secret redaction.
+- `backend/app/prompt_loader.py`: YAML prompt loading/rendering.
+- `backend/app/providers/`: provider interface and implementations.
+- `backend/app/schemas.py`: Pydantic API and game data models.
+- `prompts/`: task prompt YAML files and shared common prompt blocks.
+- `src/`: React/TypeScript frontend.
+- `vite.config.ts`: Vite dev server and `/api` backend proxy.
+- `logs/.gitkeep`: keeps the runtime log directory in Git.
+
+## Setup Commands
+
+Backend:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Frontend:
+
+```bash
+npm install
+npm run dev
+```
+
+If the backend is not on port `8000`:
+
+```bash
+BACKEND_PORT=9000 npm run dev
+```
+
+For LAN access during development, Vite listens on `0.0.0.0`; use the printed network URL. The backend can remain local because Vite proxies `/api/*`.
+
+## Validation Commands
+
+Use relevant checks before committing:
+
+```bash
+npm run typecheck
+npm run build
+.venv/bin/python -m compileall backend
+```
+
+There is no dedicated automated test suite yet.
+
+## Environment Variables
+
+Default Mistral setup:
+
+```bash
+AI_PROVIDER=mistral
+MISTRAL_API_KEY=...
+MISTRAL_MODEL=mistral-small-latest
+```
+
+Mixed setup often used during development:
+
+```bash
+WORD_MASTER_PROVIDER=mistral
+PLAYER_A_PROVIDER=openai
+PLAYER_B_PROVIDER=openai
+MISTRAL_API_KEY=...
+OPENAI_API_KEY=...
+WORD_MASTER_MODEL=mistral-medium-latest
+PLAYER_A_MODEL=gpt-4.1-mini
+PLAYER_B_MODEL=gpt-4.1-mini
+```
+
+OpenAI-compatible setup:
+
+```bash
+AI_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Do not hardcode API keys. Do not commit `.env*` files.
+
+## Provider Architecture
+
+Game logic depends on `LLMProvider`, not on concrete providers.
+
+Current provider files:
+
+- `backend/app/providers/base.py`: generic provider interface.
+- `backend/app/providers/mistral.py`: Mistral provider.
+- `backend/app/providers/openai_compatible.py`: OpenAI-compatible provider.
+- `backend/app/providers/http_json.py`: shared Chat Completions HTTP/JSON handling, response parsing, capacity errors.
+- `backend/app/providers/factory.py`: provider selection.
+
+To add a provider:
+
+1. Implement `LLMProvider.chat_json(...)`.
+2. Register the provider in `factory.py`.
+3. Read API keys/models from environment variables in the provider class.
+4. Keep game logic provider-agnostic.
+
+## Prompt Management
+
+Prompt templates live in `prompts/`:
+
+- `_common.v1.yaml`
+- `choose_secret_word.v1.yaml`
+- `generate_player_move.v1.yaml`
+- `word_master_guess.v1.yaml`
+- `guess_partner_word.v1.yaml`
+
+Each task prompt contains `id`, `version`, `temperature`, `model_role`, `schema`, `system`, and `user`.
+
+Dynamic game state should be passed as JSON in the user message. Do not put user-controlled player personality text directly into system prompts. Personality is style guidance only and must not override game rules, schemas, or validation constraints.
+
+Common constraints are injected from `_common.v1.yaml` by `backend/app/prompt_loader.py`. Python validation remains the source of truth.
+
+To add a prompt version:
+
+1. Copy an existing task YAML file, for example `generate_player_move.v1.yaml` to `generate_player_move.v2.yaml`.
+2. Set `version: v2`.
+3. Update the relevant `render_prompt(..., version="v2")` call.
+4. Keep validation unchanged unless the actual game rules changed.
+
+## Core Game Rules
+
+- Secret word is visible only to the observer UI and Word Master.
+- Players never receive the secret word in prompts.
+- Players know current prefix, public history, used words, language, and their own personality.
+- Player intended words and guesses must be normal single words.
+- Words must start with the current prefix.
+- Used words are forbidden for the rest of the session.
+- Word Master must make a concrete guess every turn.
+- Word Master may not guess the secret word or an already used word.
+- If any player explicitly calls the secret word, the game ends with players winning.
+- There are no fallback dictionaries or hardcoded candidate words in the repository.
+- If the LLM/provider fails, show an error instead of silently substituting words.
+- `maxTurns` defaults to `50`; reaching it ends the game with Word Master winning.
+
+## Deterministic Word Comparison
+
+Never use an LLM judge for equality.
+
+`backend/app/word_utils.py` owns normalization and comparison:
+
+- trim whitespace
+- lowercase
+- remove surrounding quotes
+- for Russian, normalize `ё` to `е`
+- reject spaces, hyphens, punctuation, digits, and symbols
+- English words: `a-z`
+- Russian words: `а-яё`
+- compare normalized strings exactly
+
+No fuzzy matching, semantic matching, embeddings, or LLM equality checks.
+
+## Used Words
+
+Add explicit candidate/guess words to `usedWords`:
+
+- player hidden intended word
+- Word Master guess
+- partner guess
+- secret word when the game ends
+
+Do not add ordinary clue text words automatically.
+
+## UI Responsibilities
+
+Frontend owns rendering only:
+
+- language selector
+- personality textareas
+- start/reset buttons
+- game state display
+- chat-style timeline
+- used word chips
+- compact model display
+
+Do not move game rules, validation, prompt logic, provider logic, or turn logic into the frontend.
+
+## Runtime Logs
+
+Runtime logs are JSON Lines:
+
+```text
+logs/ai-contact-game.jsonl
+```
+
+This file is gitignored. `logs/.gitkeep` is tracked.
+
+Logs include game state, prompts, provider request/response metadata, parsed LLM responses, validation failures, and game-loop exceptions. They may include game data such as secret words and player personality text. Review logs before sharing them publicly.
+
+`backend/app/event_log.py` redacts known API-key fields, bearer tokens, common key formats, and current provider key environment values before writing logs.
+
+## Security Notes
+
+- Never commit `.env*`, `.envrc`, runtime logs, `.venv`, `node_modules`, `dist`, private keys, or certificate/key files.
+- `.gitignore` is configured for those files.
+- Do not print raw API keys in terminal output or user-facing messages.
+- Do not add hardcoded candidate-word dictionaries. The product requirement is that words come from the AI provider or fail visibly.
+
+## Known Operational Notes
+
+- Mistral may return HTTP 429 `service_tier_capacity_exceeded` for some models. The backend retries capacity errors with a delay, then fails visibly if the provider remains unavailable.
+- `mistral-medium-latest` has been used successfully for Word Master when `mistral-small-latest` capacity was limited.
+- `gpt-4.1-mini` has been used successfully for Player A and Player B through the OpenAI-compatible provider.
+- Visible agent messages are delayed by about one second in `backend/app/game.py`; system messages appear immediately.
+
+## Git / Release Notes
+
+- Main branch: `main`.
+- Remote: `git@github.com:fomin-n/ai-contact-game.git`.
+- Public repository: `https://github.com/fomin-n/ai-contact-game`.
+- Use concise commits.
+- Before pushing code changes, run relevant validation commands and inspect `git status --short`.
