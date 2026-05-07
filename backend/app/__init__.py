@@ -1,0 +1,1 @@
+"""AI Contact Game backend."""

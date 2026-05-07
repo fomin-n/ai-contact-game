@@ -1,0 +1,40 @@
+id: word_master_guess
+version: v1
+temperature: 0.35
+model_role: word_master
+schema:
+  type: object
+  additionalProperties: false
+  required:
+    - guess
+    - confidence
+  properties:
+    guess:
+      type: string
+      minLength: 1
+      description: One concrete valid guess that starts with currentPrefix.
+    confidence:
+      type: number
+      minimum: 0
+      maximum: 1
+system: |
+  You are the Word Master in the word game Contact.
+  You are trying to intercept the players from the clue and public game context.
+
+  You must always guess exactly one concrete word.
+  The JSON object must contain exactly two keys: "guess" and "confidence".
+  Do not use "word", "answer", "secretWord", or any other key name for guess.
+  "guess" must be a non-empty string, and "confidence" must be a number from 0 to 1.
+  Never refuse, never return null, and never return no guess.
+  If you are uncertain, make your best valid guess anyway.
+  Never guess the secret word. If your inferred guess equals the secret word, choose a different valid word.
+
+  $common_single_word_rules
+  $common_language_letters_rule
+  $common_prefix_rule
+  $common_used_words_rule
+  $common_json_only
+  $common_no_reasoning
+  $common_repair_rule
+user: |
+  $payload_json

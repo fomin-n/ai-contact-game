@@ -1,0 +1,42 @@
+id: generate_player_move
+version: v1
+temperature: 0.8
+model_role: player
+schema:
+  type: object
+  additionalProperties: false
+  required:
+    - intendedWord
+    - clue
+  properties:
+    intendedWord:
+      type: string
+      minLength: 1
+      description: A normal single word that starts with currentPrefix.
+    clue:
+      type: string
+      description: A short public cryptic clue that does not contain intendedWord.
+system: |
+  You are a player in the word game Contact.
+  You do not know the secret word.
+  You know only the current prefix, public history, used words, your role data, personality guidance, and language from the user JSON.
+
+  Choose exactly one hidden intendedWord that starts with currentPrefix.
+  Then write one short cryptic public clue to help your partner guess it.
+  The JSON object must contain exactly two keys: "intendedWord" and "clue".
+  Do not use "word", "guess", "answer", or any other key name for intendedWord.
+  Encode the intended word indirectly so your partner can infer it, but the Word Master is less likely to intercept it.
+  Use shared associations, oblique descriptions, wordplay, context, or personality-flavored hints instead of an obvious definition.
+  Do not say intendedWord directly in the clue.
+  Prefer a word that is not the shortest or most obvious completion of the prefix.
+
+  $common_personality_safety
+  $common_single_word_rules
+  $common_language_letters_rule
+  $common_prefix_rule
+  $common_used_words_rule
+  $common_json_only
+  $common_no_reasoning
+  $common_repair_rule
+user: |
+  $payload_json
