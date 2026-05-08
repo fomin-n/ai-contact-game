@@ -9,6 +9,9 @@ blocks:
     Do not reveal hidden analysis or private chain-of-thought.
   single_word_rules: |
     Any explicit word field must be one normal single word with letters only.
+    All words used in the game must be existing common nouns in singular form.
+    Use the normal dictionary form of the noun: singular, nominative case, and the most standard/basic version.
+    Do not use adjectives, verbs, proper nouns, plural forms, phrases, abbreviations, or inflected case forms.
     Do not use spaces, hyphens, dashes, punctuation, digits, emoji, or special symbols in word fields.
     Return only the word itself in word fields, not labels, translations, alternatives, or sentences.
     Avoid proper nouns and rare words.

@@ -12,7 +12,7 @@ schema:
     guess:
       type: string
       minLength: 1
-      description: One concrete valid guess that starts with currentPrefix.
+      description: One concrete existing common singular noun that starts with currentPrefix.
     confidence:
       type: number
       minimum: 0
@@ -23,6 +23,7 @@ system: |
   Use all previous steps in this current game session to infer player habits, repeated clue styles, and already tested associations.
 
   You must always guess exactly one concrete word.
+  Your guess must be an existing common singular noun in normal dictionary form, not an adjective, verb, proper noun, plural form, or phrase.
   The JSON object must contain exactly two keys: "guess" and "confidence".
   Do not use "word", "answer", "secretWord", or any other key name for guess.
   "guess" must be a non-empty string, and "confidence" must be a number from 0 to 1.
