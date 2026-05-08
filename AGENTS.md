@@ -9,7 +9,7 @@ This file is the agent-facing operating guide for `ai-contact-game`. Keep `READM
 The observer starts a game from the web UI. Three AI roles then play automatically:
 
 - `Word Master`: chooses and knows the secret word, reveals prefixes, and tries to intercept player clues.
-- `Player A` and `Player B`: do not know the secret word. They only know the current prefix, public message history, used words, language, and their own personality text.
+- `Player A` and `Player B`: do not know the secret word. They only know the current prefix, redacted full public session history, used words, language, and their own personality text.
 
 The frontend is observer-only. All game rules, prompts, LLM calls, state transitions, validation, and deterministic word comparison belong on the Python backend.
 
@@ -181,7 +181,9 @@ To add a prompt version:
 
 - Secret word is visible only to the observer UI and Word Master.
 - Players never receive the secret word in prompts.
-- Players know current prefix, public history, used words, language, and their own personality.
+- Players know current prefix, redacted full public session history, used words, language, and their own personality.
+- Word Master receives full session history, including the secret word context.
+- Do not truncate prompt session history unless a future context-size change explicitly requires it.
 - Player intended words and guesses must be normal single words.
 - Words must start with the current prefix.
 - Used words are forbidden for the rest of the session.
@@ -260,7 +262,7 @@ Logs include game state, prompts, provider request/response metadata, parsed LLM
 - Mistral may return HTTP 429 `service_tier_capacity_exceeded` for some models. The backend retries capacity errors with a delay, then fails visibly if the provider remains unavailable.
 - `mistral-medium-latest` has been used successfully for Word Master when `mistral-small-latest` capacity was limited.
 - `gpt-4.1-mini` has been used successfully for Player A and Player B through the OpenAI-compatible provider.
-- Visible agent messages are delayed by about one second in `backend/app/game.py`; system messages appear immediately.
+- There is no artificial delay before visible game-chat messages. Provider latency is the only expected delay.
 
 ## Git / Release Notes
 

@@ -11,8 +11,6 @@ from .event_log import write_event
 from .schemas import AgentModelConfig, GameMessage, GameState, PlayerRole, ProviderInfo, StartGameRequest
 from .word_utils import first_letters, is_valid_word, normalize_word, same_word
 
-AGENT_MESSAGE_DELAY_SECONDS = 1.0
-
 COPY = {
     "en": {
         "playerA": "Player A",
@@ -201,9 +199,6 @@ class GameManager:
         text: str,
         metadata: dict | None = None,
     ) -> bool:
-        if role in {"playerA", "playerB", "wordMaster"}:
-            await asyncio.sleep(AGENT_MESSAGE_DELAY_SECONDS)
-
         def append(state: GameState) -> None:
             state.messages.append(
                 GameMessage(
@@ -225,11 +220,20 @@ class GameManager:
 
         return await self._mutate(run_id, append)
 
-    def _public_history(self, state: GameState) -> list[str]:
-        return [
-            f"{role_label(state.language, message.role)}: {message.text}"
-            for message in state.messages[-32:]
-        ]
+    def _agent_history(self, state: GameState, *, include_secret: bool) -> list[str]:
+        labels = COPY[state.language]
+        secret_placeholder = "[secret]" if state.language == "en" else "[секрет]"
+        history = []
+        for index, message in enumerate(state.messages, start=1):
+            text = message.text
+            event_type = (message.metadata or {}).get("eventType")
+            if not include_secret:
+                if event_type == "secret-chosen":
+                    text = labels["wordMasterChose"]
+                elif state.secretWord:
+                    text = text.replace(state.secretWord, secret_placeholder)
+            history.append(f"{index}. {role_label(state.language, message.role)}: {text}")
+        return history
 
     def _add_used_words(self, state: GameState, words: list[str]) -> None:
         seen = {normalize_word(word, state.language) for word in state.usedWords}
@@ -415,7 +419,7 @@ class GameManager:
             player_role=actor,
             language=state.language,
             current_prefix=state.currentPrefix,
-            public_history=self._public_history(state),
+            public_history=self._agent_history(state, include_secret=False),
             used_words=state.usedWords,
             personality=actor_personality,
         )
@@ -440,7 +444,7 @@ class GameManager:
             secret_word=state.secretWord,
             current_prefix=state.currentPrefix,
             clue=clue,
-            public_history=self._public_history(state),
+            public_history=self._agent_history(state, include_secret=True),
             used_words=state.usedWords,
         )
         master_guess_word = normalize_word(master_guess.guess, state.language)
@@ -497,7 +501,7 @@ class GameManager:
             language=state.language,
             current_prefix=state.currentPrefix,
             clue=clue,
-            public_history=self._public_history(state),
+            public_history=self._agent_history(state, include_secret=False),
             used_words=state.usedWords,
             personality=partner_personality,
         )

@@ -32,10 +32,6 @@ def _language_name(language: str) -> str:
     return "Russian" if language == "ru" else "English"
 
 
-def _compact(values: list[str], limit: int = 40) -> list[str]:
-    return values[-limit:] if values else []
-
-
 def _player_model(role: PlayerRole, models: AgentModelConfig) -> str:
     return models.player_a_model if role == "playerA" else models.player_b_model
 
@@ -359,9 +355,10 @@ async def generate_player_move(
                 "language": language,
                 "languageName": _language_name(language),
                 "currentPrefix": current_prefix,
-                "usedWords": _compact(used_words),
-                "forbiddenWords": _compact(used_words),
-                "publicHistory": _compact(public_history, 24),
+                "usedWords": used_words,
+                "forbiddenWords": used_words,
+                "publicHistory": public_history,
+                "sessionHistory": public_history,
                 "personality": personality or "",
                 "requiredOutputKeys": ["intendedWord", "clue"],
             },
@@ -416,9 +413,10 @@ async def word_master_guess(
                 "secretWord": secret,
                 "currentPrefix": current_prefix,
                 "clue": clue,
-                "usedWords": _compact(used_words),
-                "forbiddenWords": _compact(used_words),
-                "publicHistory": _compact(public_history, 24),
+                "usedWords": used_words,
+                "forbiddenWords": used_words,
+                "publicHistory": public_history,
+                "sessionHistory": public_history,
                 "requiredOutputKeys": ["guess", "confidence"],
             },
         ),
@@ -467,9 +465,10 @@ async def guess_partner_word(
                 "languageName": _language_name(language),
                 "currentPrefix": current_prefix,
                 "clue": clue,
-                "usedWords": _compact(used_words),
-                "forbiddenWords": _compact(used_words),
-                "publicHistory": _compact(public_history, 24),
+                "usedWords": used_words,
+                "forbiddenWords": used_words,
+                "publicHistory": public_history,
+                "sessionHistory": public_history,
                 "personality": personality or "",
                 "requiredOutputKeys": ["guess"],
             },

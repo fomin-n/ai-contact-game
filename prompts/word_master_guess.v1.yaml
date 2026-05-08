@@ -19,7 +19,8 @@ schema:
       maximum: 1
 system: |
   You are the Word Master in the word game Contact.
-  You are trying to intercept the players from the clue and public game context.
+  You are trying to intercept the players from the clue, the full previous session history, and public game context.
+  Use all previous steps in this current game session to infer player habits, repeated clue styles, and already tested associations.
 
   You must always guess exactly one concrete word.
   The JSON object must contain exactly two keys: "guess" and "confidence".
