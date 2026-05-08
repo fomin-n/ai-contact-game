@@ -25,13 +25,39 @@ The frontend is observer-only. All game rules, prompts, LLM calls, state transit
 - `backend/app/providers/`: provider interface and implementations.
 - `backend/app/schemas.py`: Pydantic API and game data models.
 - `prompts/`: task prompt YAML files and shared common prompt blocks.
+- `scripts/dev.sh`: one-command local installer/runner for backend and frontend.
 - `src/`: React/TypeScript frontend.
 - `vite.config.ts`: Vite dev server and `/api` backend proxy.
+- `.env.example`: local environment template; copy to `.env` and fill credentials.
 - `logs/.gitkeep`: keeps the runtime log directory in Git.
 
 ## Setup Commands
 
-Backend:
+Preferred local setup:
+
+```bash
+cp .env.example .env
+# Fill at least one provider key in .env.
+./scripts/dev.sh
+```
+
+`scripts/dev.sh` does all of the following:
+
+- loads `.env` if present
+- creates `.venv` if missing
+- installs `requirements.txt`
+- runs `npm install`
+- starts FastAPI on `127.0.0.1:${BACKEND_PORT:-8000}`
+- starts Vite on `0.0.0.0:${FRONTEND_PORT:-5173}`
+- stops both servers on Ctrl+C
+
+Use install-only mode when an agent needs to validate dependencies without leaving servers running:
+
+```bash
+./scripts/dev.sh --install-only
+```
+
+Manual backend setup remains useful for debugging:
 
 ```bash
 python3 -m venv .venv
@@ -47,10 +73,16 @@ npm install
 npm run dev
 ```
 
-If the backend is not on port `8000`:
+If the backend is not on port `8000`, set `BACKEND_PORT`:
 
 ```bash
 BACKEND_PORT=9000 npm run dev
+```
+
+For a single combined-script run with custom ports:
+
+```bash
+BACKEND_PORT=9000 FRONTEND_PORT=5174 ./scripts/dev.sh
 ```
 
 For LAN access during development, Vite listens on `0.0.0.0`; use the printed network URL. The backend can remain local because Vite proxies `/api/*`.
@@ -100,6 +132,8 @@ OPENAI_MODEL=gpt-4.1-mini
 ```
 
 Do not hardcode API keys. Do not commit `.env*` files.
+
+`.env` is loaded by `scripts/dev.sh` as a shell-compatible file. Keep it to simple `KEY=value` lines. `.env.example` is intentionally safe to commit and should not contain real credentials.
 
 ## Provider Architecture
 

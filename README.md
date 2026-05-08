@@ -29,45 +29,36 @@ GitHub: [fomin-n/ai-contact-game](https://github.com/fomin-n/ai-contact-game)
 
 ## Quick Start
 
-Install backend dependencies:
+Create a local environment file:
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+cp .env.example .env
 ```
 
-Set AI credentials:
+Fill in at least one API key in `.env`, then run everything with one command:
 
 ```bash
-export AI_PROVIDER=mistral
-export MISTRAL_API_KEY=...
-export MISTRAL_MODEL=mistral-small-latest
+./scripts/dev.sh
 ```
 
-Start the backend:
+The script installs Python and Node dependencies, starts the FastAPI backend, starts the Vite frontend, and prints the local URL.
 
-```bash
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
-```
-
-Install and start the frontend in another terminal:
-
-```bash
-npm install
-npm run dev
-```
-
-Open the Vite URL, usually:
+Open:
 
 ```text
 http://127.0.0.1:5173
 ```
 
-For another backend port:
+Ports can be changed in `.env` or for a single run:
 
 ```bash
-BACKEND_PORT=9000 npm run dev
+BACKEND_PORT=9000 FRONTEND_PORT=5174 ./scripts/dev.sh
+```
+
+To install dependencies without starting servers:
+
+```bash
+./scripts/dev.sh --install-only
 ```
 
 ## Useful Commands
