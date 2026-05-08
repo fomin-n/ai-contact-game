@@ -101,6 +101,22 @@ h2 {
   font-size: 1.02rem;
 }
 
+.intro-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rules-button {
+  min-height: 36px;
+  border-color: #c7c0b1;
+  padding: 0 12px;
+  color: #38413b;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .status-pill {
   flex: 0 0 auto;
   border-radius: 999px;
@@ -120,6 +136,55 @@ h2 {
 
 .status-pill.finished {
   background: #235a50;
+}
+
+.rules-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: start center;
+  overflow: auto;
+  background: rgba(23, 32, 27, 0.24);
+  padding: 80px 18px 24px;
+}
+
+.rules-dialog {
+  width: min(560px, 100%);
+  border: 1px solid #d4ccb9;
+  border-radius: 8px;
+  background: #fffdf8;
+  box-shadow: 0 18px 42px rgba(38, 35, 28, 0.2);
+  padding: 18px;
+}
+
+.rules-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rules-dialog header button {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.rules-dialog p {
+  color: #4f5953;
+  line-height: 1.45;
+}
+
+.rules-dialog ol {
+  margin: 14px 0 0;
+  padding-left: 22px;
+  color: #17201b;
+}
+
+.rules-dialog li {
+  margin-top: 9px;
+  line-height: 1.45;
 }
 
 .game-board {
@@ -476,8 +541,12 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .status-pill {
+  .intro-actions {
     justify-self: start;
+  }
+
+  .rules-backdrop {
+    padding-top: 36px;
   }
 
   .chat-status {

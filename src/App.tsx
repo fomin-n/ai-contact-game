@@ -37,6 +37,33 @@ const defaultPersonalities: Record<Language, Record<PlayerRole, string>> = {
   }
 };
 
+const rulesCopy = {
+  en: {
+    title: "Rules",
+    intro: "Contact is a word guessing game with one Word Master and two guessing players.",
+    steps: [
+      "The Word Master secretly chooses a common word and reveals only its first letter.",
+      "Players give cryptic clues for other words that start with the current revealed prefix.",
+      "The Word Master tries to intercept the clue by guessing that word first.",
+      "If the partner understands the clue and both player words match, contact succeeds and the next secret-word letter is revealed.",
+      "The players win when they explicitly name the secret word. The Word Master wins if the turn limit is reached."
+    ],
+    close: "Close"
+  },
+  ru: {
+    title: "Правила",
+    intro: "«Контакт» — словесная игра, где есть ведущий и игроки, отгадывающие слово.",
+    steps: [
+      "Ведущий загадывает обычное слово и открывает только первую букву.",
+      "Игроки дают хитрые подсказки к другим словам, которые начинаются с текущего открытого префикса.",
+      "Ведущий пытается перехватить подсказку и первым угадать это слово.",
+      "Если второй игрок понял подсказку и слова игроков совпали, контакт состоялся и открывается следующая буква секретного слова.",
+      "Игроки побеждают, если называют секретное слово. Ведущий побеждает, если закончились ходы."
+    ],
+    close: "Закрыть"
+  }
+} satisfies Record<Language, { title: string; intro: string; steps: string[]; close: string }>;
+
 const copy = {
   en: {
     title: "AI «Contact» game",
@@ -68,6 +95,7 @@ const copy = {
     wordMasterModel: "Word Master model",
     playerAModel: "Player A model",
     playerBModel: "Player B model",
+    rules: "Rules",
     apiKeyMissing: "One or more AI provider API keys are missing. Set the required key variables and restart the backend."
   },
   ru: {
@@ -100,6 +128,7 @@ const copy = {
     wordMasterModel: "Модель ведущего",
     playerAModel: "Модель Игрока A",
     playerBModel: "Модель Игрока B",
+    rules: "Правила",
     apiKeyMissing: "Не задан один или несколько API-ключей AI-провайдеров. Укажите нужные переменные и перезапустите сервер."
   }
 } satisfies Record<Language, Record<string, string>>;
@@ -138,11 +167,13 @@ function App() {
   const [providerInfo, setProviderInfo] = useState<ProviderInfo>(initialProviderInfo);
   const [game, setGame] = useState<GameState>(() => createEmptyState("en", initialProviderInfo));
   const [isRequesting, setIsRequesting] = useState(false);
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
   const [uiError, setUiError] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const visibleLabels = copy[game.language];
   const inputLabels = copy[language];
+  const activeRules = rulesCopy[language];
   const statusLabel = useMemo(() => visibleLabels[game.status], [game.status, visibleLabels]);
   const activeProviderInfo = game.providerInfo ?? providerInfo;
 
@@ -249,8 +280,44 @@ function App() {
           <h1>{inputLabels.title}</h1>
           <p>{inputLabels.subtitle}</p>
         </div>
-        <span className={`status-pill ${game.status}`}>{statusLabel}</span>
+        <div className="intro-actions">
+          <button
+            className="rules-button"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={isRulesOpen}
+            onClick={() => setIsRulesOpen(true)}
+          >
+            {inputLabels.rules}
+          </button>
+          <span className={`status-pill ${game.status}`}>{statusLabel}</span>
+        </div>
       </section>
+
+      {isRulesOpen && (
+        <div className="rules-backdrop" role="presentation" onClick={() => setIsRulesOpen(false)}>
+          <section
+            className="rules-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rules-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header>
+              <h2 id="rules-title">{activeRules.title}</h2>
+              <button type="button" onClick={() => setIsRulesOpen(false)}>
+                {activeRules.close}
+              </button>
+            </header>
+            <p>{activeRules.intro}</p>
+            <ol>
+              {activeRules.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </section>
+        </div>
+      )}
 
       <section className="game-board">
         <aside className="side-column">
