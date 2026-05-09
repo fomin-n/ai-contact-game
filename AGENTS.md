@@ -183,6 +183,7 @@ To add a prompt version:
 - Players never receive the secret word in prompts.
 - Players know current prefix, redacted full public session history, used words, language, and their own personality.
 - Word Master receives full session history, including the secret word context.
+- Prompt payloads include `allPreviousStepsInCurrentSession` as the explicit chronological context field for Player A, Player B, and Word Master.
 - Do not truncate prompt session history unless a future context-size change explicitly requires it.
 - Player intended words and guesses must be normal single words.
 - Prompt rules require every secret word, intended word, and guess to be an existing common singular noun in normal dictionary form: singular, nominative case, and the most standard/basic noun form.
