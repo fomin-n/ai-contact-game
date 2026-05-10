@@ -494,6 +494,10 @@ button:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.message-word {
+  font-weight: 900;
+}
+
 .message.system p {
   color: #69716c;
   font-size: 0.9rem;

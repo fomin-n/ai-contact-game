@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getConfig, getGameState, resetGame as resetGameApi, startGame as startGameApi } from "./lib/api";
-import type { GameState, Language, PlayerRole, ProviderInfo, Role } from "./lib/gameTypes";
+import type { GameMessage, GameState, Language, PlayerRole, ProviderInfo, Role } from "./lib/gameTypes";
 
 const DEFAULT_MAX_TURNS = 50;
 
@@ -164,6 +164,39 @@ function playerLabel(language: Language, role: PlayerRole): string {
 function roleLabel(language: Language, role: Role): string {
   if (role === "playerA" || role === "playerB") return playerLabel(language, role);
   return role === "wordMaster" ? copy[language].wordMaster : copy[language].system;
+}
+
+function renderMessageText(message: GameMessage) {
+  const word = message.metadata?.word?.trim();
+  const shouldHighlight = word && ["playerA", "playerB", "wordMaster"].includes(message.role);
+  if (!shouldHighlight) return message.text;
+
+  const text = message.text;
+  const lowerText = text.toLocaleLowerCase();
+  const lowerWord = word.toLocaleLowerCase();
+  const parts = [];
+  let cursor = 0;
+  let matchIndex = lowerText.indexOf(lowerWord);
+
+  while (matchIndex >= 0) {
+    if (matchIndex > cursor) {
+      parts.push(text.slice(cursor, matchIndex));
+    }
+    const end = matchIndex + word.length;
+    parts.push(
+      <strong className="message-word" key={`${message.id}-${matchIndex}`}>
+        {text.slice(matchIndex, end)}
+      </strong>
+    );
+    cursor = end;
+    matchIndex = lowerText.indexOf(lowerWord, cursor);
+  }
+
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor));
+  }
+
+  return parts.length ? parts : message.text;
 }
 
 function App() {
@@ -456,7 +489,7 @@ function App() {
                   <span>{roleLabel(game.language, message.role)}</span>
                   <time>{new Date(message.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                 </div>
-                <p>{message.text}</p>
+                <p>{renderMessageText(message)}</p>
               </article>
             ))}
             {!game.messages.length && <p className="muted">...</p>}
