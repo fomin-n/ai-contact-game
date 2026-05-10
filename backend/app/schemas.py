@@ -74,6 +74,7 @@ class StartGameRequest(BaseModel):
     language: Language
     playerAPersonality: str
     playerBPersonality: str
+    secretWord: str | None = None
     maxTurns: int = Field(default=50, ge=1, le=200)
 
 

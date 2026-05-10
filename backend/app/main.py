@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -45,7 +45,10 @@ async def state():
 
 @app.post("/api/game/start")
 async def start(request: StartGameRequest):
-    return await game_manager.start(request)
+    try:
+        return await game_manager.start(request)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @app.post("/api/game/reset")

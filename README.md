@@ -7,6 +7,7 @@ Three AI agents play while you watch:
 - **Word Master** secretly chooses a word and tries to intercept clues.
 - **Player A** and **Player B** only know the revealed prefix and try to make contact.
 - The observer sees the secret word, the prefix, used words, and the full chat timeline.
+- The observer may optionally set the secret word before starting; Word Master then plays as if it chose that word.
 
 The project is intentionally small: Python runs the game and AI calls, React renders the observer UI.
 

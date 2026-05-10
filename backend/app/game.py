@@ -39,6 +39,7 @@ COPY = {
             "This usually means the model repeated a used word, picked the hidden secret word by coincidence, "
             "or returned a word that does not match the current prefix. Try again, or use a stronger model."
         ),
+        "invalidCustomSecret": "Custom secret word must be one valid single word for the selected language.",
         "usedWordsFinal": "Used words:",
         "secretFinal": "Secret word:",
         "turnsFinal": "Turns:",
@@ -71,6 +72,7 @@ COPY = {
             "Обычно это значит, что модель повторила использованное слово, случайно выбрала скрытое "
             "секретное слово или дала слово не с текущим префиксом. Попробуйте еще раз или выберите модель сильнее."
         ),
+        "invalidCustomSecret": "Пользовательское секретное слово должно быть одним допустимым словом для выбранного языка.",
         "usedWordsFinal": "Использованные слова:",
         "secretFinal": "Секретное слово:",
         "turnsFinal": "Ходов:",
@@ -114,6 +116,7 @@ class GameManager:
 
     async def start(self, request: StartGameRequest) -> GameState:
         await self._cancel_task()
+        provided_secret = self._provided_secret_word(request)
         async with self._lock:
             self._run_id += 1
             run_id = self._run_id
@@ -124,6 +127,10 @@ class GameManager:
                 max_turns=request.maxTurns,
             )
             self._state.status = "running"
+            if provided_secret:
+                self._state.secretWord = provided_secret
+                self._state.currentPrefix = first_letters(provided_secret, 1)
+                self._state.revealedLength = 1
             state = copy.deepcopy(self._state)
         write_event(
             "game_start",
@@ -179,6 +186,15 @@ class GameManager:
             playerBPersonality=player_b_personality,
             providerInfo=self.provider_info,
         )
+
+    def _provided_secret_word(self, request: StartGameRequest) -> str:
+        raw_word = (request.secretWord or "").strip()
+        if not raw_word:
+            return ""
+        word = normalize_word(raw_word, request.language)
+        if not is_valid_word(word, request.language):
+            raise ValueError(COPY[request.language]["invalidCustomSecret"])
+        return word
 
     async def _is_active(self, run_id: int) -> bool:
         async with self._lock:
@@ -353,12 +369,22 @@ class GameManager:
 
     async def _initialize_secret(self, run_id: int) -> None:
         state = await self._snapshot()
-        secret_result = await choose_secret_word(
-            provider=self.providers.word_master_provider,
-            models=self.models,
-            language=state.language,
-        )
-        secret_word = normalize_word(secret_result["word"], state.language)
+        if state.secretWord:
+            secret_word = state.secretWord
+            secret_result = {"word": secret_word, "source": "observer"}
+            write_event(
+                "secret_word_provided_by_observer",
+                runId=run_id,
+                language=state.language,
+                secretWord=secret_word,
+            )
+        else:
+            secret_result = await choose_secret_word(
+                provider=self.providers.word_master_provider,
+                models=self.models,
+                language=state.language,
+            )
+            secret_word = normalize_word(secret_result["word"], state.language)
         current_prefix = first_letters(secret_word, 1)
         labels = COPY[state.language]
         write_event(

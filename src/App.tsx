@@ -80,6 +80,9 @@ const copy = {
     start: "Let them play",
     reset: "Reset game",
     secretWord: "Secret word",
+    optionalSecretWord: "Secret word",
+    optionalSecretWordPlaceholder: "Leave empty for Word Master",
+    optionalSecretWordHint: "Optional. If set, Word Master uses this as the hidden word.",
     currentPrefix: "Current prefix",
     turn: "Turn",
     actingPlayer: "Acting player",
@@ -113,6 +116,9 @@ const copy = {
     start: "Начать игру",
     reset: "Сбросить",
     secretWord: "Секретное слово",
+    optionalSecretWord: "Секретное слово",
+    optionalSecretWordPlaceholder: "Оставьте пустым для ведущего",
+    optionalSecretWordHint: "Необязательно. Если задано, ведущий играет с этим словом.",
     currentPrefix: "Открытый префикс",
     turn: "Ход",
     actingPlayer: "Ходит",
@@ -164,6 +170,7 @@ function App() {
   const [language, setLanguage] = useState<Language>("en");
   const [playerAPersonality, setPlayerAPersonality] = useState(defaultPersonalities.en.playerA);
   const [playerBPersonality, setPlayerBPersonality] = useState(defaultPersonalities.en.playerB);
+  const [customSecretWord, setCustomSecretWord] = useState("");
   const [providerInfo, setProviderInfo] = useState<ProviderInfo>(initialProviderInfo);
   const [game, setGame] = useState<GameState>(() => createEmptyState("en", initialProviderInfo));
   const [isRequesting, setIsRequesting] = useState(false);
@@ -235,6 +242,7 @@ function App() {
     setLanguage(nextLanguage);
     setPlayerAPersonality(defaultPersonalities[nextLanguage].playerA);
     setPlayerBPersonality(defaultPersonalities[nextLanguage].playerB);
+    setCustomSecretWord("");
     if (game.status === "idle") {
       setGame(createEmptyState(nextLanguage, activeProviderInfo));
     }
@@ -248,6 +256,7 @@ function App() {
         language,
         playerAPersonality,
         playerBPersonality,
+        secretWord: customSecretWord.trim() || undefined,
         maxTurns: DEFAULT_MAX_TURNS
       });
       setGame(state);
@@ -332,6 +341,18 @@ function App() {
                 <option value="en">{inputLabels.english}</option>
                 <option value="ru">{inputLabels.russian}</option>
               </select>
+            </label>
+
+            <label className="field">
+              <span>{inputLabels.optionalSecretWord}</span>
+              <input
+                value={customSecretWord}
+                onChange={(event) => setCustomSecretWord(event.target.value)}
+                disabled={isRunning || isRequesting}
+                placeholder={inputLabels.optionalSecretWordPlaceholder}
+                autoComplete="off"
+              />
+              <small>{inputLabels.optionalSecretWordHint}</small>
             </label>
 
             <label className="field">

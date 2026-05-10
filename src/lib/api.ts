@@ -13,7 +13,14 @@ async function requestJson<T>(path: string, options: RequestInit = {}): Promise<
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(detail || `Request failed: ${response.status}`);
+    let message = detail;
+    try {
+      const parsed = JSON.parse(detail) as { detail?: string };
+      message = parsed.detail || detail;
+    } catch {
+      message = detail;
+    }
+    throw new Error(message || `Request failed: ${response.status}`);
   }
 
   return response.json() as Promise<T>;
@@ -31,6 +38,7 @@ export function startGame(params: {
   language: Language;
   playerAPersonality: string;
   playerBPersonality: string;
+  secretWord?: string;
   maxTurns?: number;
 }): Promise<GameState> {
   return requestJson("/api/game/start", {
