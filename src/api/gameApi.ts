@@ -1,4 +1,4 @@
-import type { GameState, Language, ProviderInfo } from "./gameTypes";
+import type { GameState, Language, ProviderInfo } from "../types/game";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 

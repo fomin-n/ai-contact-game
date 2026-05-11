@@ -28,6 +28,13 @@ The frontend is observer-only. All game rules, prompts, LLM calls, state transit
 - `prompts/`: task prompt YAML files and shared common prompt blocks.
 - `scripts/dev.sh`: one-command local installer/runner for backend and frontend.
 - `src/`: React/TypeScript frontend.
+- `src/App.tsx`: frontend root container for state orchestration and page composition.
+- `src/components/`: small presentational React components for controls, model display, stats, timeline, rules, notices, and used words.
+- `src/api/gameApi.ts`: frontend REST client for backend endpoints.
+- `src/types/game.ts`: frontend API/game state TypeScript types that mirror backend response shapes.
+- `src/i18n/copy.ts`: UI copy and rules-dialog text.
+- `src/config/defaults.ts`: frontend-only defaults for initial empty state, default personalities, and initial provider display.
+- `src/utils/gameUi.tsx`: frontend-only role labels and message rendering helpers.
 - `vite.config.ts`: Vite dev server and `/api` backend proxy.
 - `.env.example`: local environment template; copy to `.env` and fill credentials.
 - `logs/.gitkeep`: keeps the runtime log directory in Git.
