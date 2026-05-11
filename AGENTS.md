@@ -27,15 +27,18 @@ The frontend is observer-only. All game rules, prompts, LLM calls, state transit
 - `backend/app/schemas.py`: Pydantic API and game data models.
 - `prompts/`: task prompt YAML files and shared common prompt blocks.
 - `scripts/dev.sh`: one-command local installer/runner for backend and frontend.
-- `src/`: React/TypeScript frontend.
-- `src/App.tsx`: frontend root container for state orchestration and page composition.
-- `src/components/`: small presentational React components for controls, model display, stats, timeline, rules, notices, and used words.
-- `src/api/gameApi.ts`: frontend REST client for backend endpoints.
-- `src/types/game.ts`: frontend API/game state TypeScript types that mirror backend response shapes.
-- `src/i18n/copy.ts`: UI copy and rules-dialog text.
-- `src/config/defaults.ts`: frontend-only defaults for initial empty state, default personalities, and initial provider display.
-- `src/utils/gameUi.tsx`: frontend-only role labels and message rendering helpers.
-- `vite.config.ts`: Vite dev server and `/api` backend proxy.
+- `frontend/`: React/TypeScript/Vite frontend package.
+- `frontend/src/App.tsx`: frontend root composition component.
+- `frontend/src/hooks/useGameController.ts`: React Query-backed UI orchestration for config, game state polling, and start/reset mutations. Keep this hook UI-only.
+- `frontend/src/components/`: component folders with colocated `.tsx`, `.css`, and `index.ts` files.
+- `frontend/src/api/gameApi.ts`: thin typed REST client for backend endpoints. It should not contain React logic.
+- `frontend/src/types/game.ts`: frontend API/game state TypeScript types that mirror backend response shapes.
+- `frontend/src/i18n/copy.ts`: UI copy and rules-dialog text.
+- `frontend/src/constants/gameConstants.ts`: UI constants such as max turns and polling interval.
+- `frontend/src/config/defaults.ts`: frontend-only defaults for initial empty state, default personalities, and initial provider display.
+- `frontend/src/utils/gameUi.tsx`: frontend-only role labels and message rendering helpers.
+- `frontend/src/styles/global.css`: global/base CSS only.
+- `frontend/vite.config.ts`: Vite dev server and `/api` backend proxy.
 - `.env.example`: local environment template; copy to `.env` and fill credentials.
 - `logs/.gitkeep`: keeps the runtime log directory in Git.
 
@@ -54,7 +57,7 @@ cp .env.example .env
 - loads `.env` if present
 - creates `.venv` if missing
 - installs `requirements.txt`
-- runs `npm install`
+- runs `npm install` in `frontend/`
 - starts FastAPI on `127.0.0.1:${BACKEND_PORT:-8000}`
 - starts Vite on `0.0.0.0:${FRONTEND_PORT:-5173}`
 - stops both servers on Ctrl+C
@@ -77,6 +80,7 @@ uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 Frontend:
 
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
@@ -84,6 +88,7 @@ npm run dev
 If the backend is not on port `8000`, set `BACKEND_PORT`:
 
 ```bash
+cd frontend
 BACKEND_PORT=9000 npm run dev
 ```
 
@@ -100,8 +105,10 @@ For LAN access during development, Vite listens on `0.0.0.0`; use the printed ne
 Use relevant checks before committing:
 
 ```bash
+cd frontend
 npm run typecheck
 npm run build
+cd ..
 .venv/bin/python -m compileall backend
 ```
 
@@ -245,6 +252,7 @@ Frontend owns rendering only:
 - chat-style timeline
 - used word chips
 - compact model display
+- React Query config/game-state queries and start/reset mutations
 
 Do not move game rules, validation, prompt logic, provider logic, or turn logic into the frontend.
 

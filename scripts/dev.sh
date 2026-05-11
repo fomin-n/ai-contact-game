@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FRONTEND_DIR="$ROOT_DIR/frontend"
 VENV_DIR="${VENV_DIR-}"
 PYTHON_BIN="${PYTHON_BIN-}"
 BACKEND_PORT="${BACKEND_PORT-}"
@@ -110,7 +111,7 @@ log "Installing Python dependencies"
 "$VENV_DIR/bin/python" -m pip install -r requirements.txt
 
 log "Installing Node dependencies"
-npm install
+npm install --prefix "$FRONTEND_DIR"
 
 if [[ -z "${MISTRAL_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" ]]; then
   log "No provider API key found. The app will open, but games will fail until MISTRAL_API_KEY or OPENAI_API_KEY is set."
@@ -138,7 +139,7 @@ log "Starting backend on http://127.0.0.1:$BACKEND_PORT"
 BACKEND_PID=$!
 
 log "Starting frontend on http://127.0.0.1:$FRONTEND_PORT"
-BACKEND_PORT="$BACKEND_PORT" npm run dev -- --port "$FRONTEND_PORT" &
+BACKEND_PORT="$BACKEND_PORT" npm --prefix "$FRONTEND_DIR" run dev -- --port "$FRONTEND_PORT" &
 FRONTEND_PID=$!
 
 log "Open http://127.0.0.1:$FRONTEND_PORT"

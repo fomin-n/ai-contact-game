@@ -1,0 +1,28 @@
+.controls {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.field span {
+  color: #4e5752;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.field small {
+  color: #717b74;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}

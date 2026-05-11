@@ -1,0 +1,37 @@
+.model-panel {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  background: #ded8ca;
+}
+
+.model-row {
+  display: grid;
+  grid-template-columns: minmax(116px, 0.76fr) minmax(0, 1.24fr);
+  gap: 12px;
+  align-items: center;
+  background: #fffdf8;
+  padding: 12px 14px;
+}
+
+.model-row span {
+  color: #63706a;
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.model-row strong {
+  color: #17201b;
+  font-size: 0.95rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 780px) {
+  .model-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}

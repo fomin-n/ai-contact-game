@@ -65,8 +65,10 @@ To install dependencies without starting servers:
 ## Useful Commands
 
 ```bash
+cd frontend
 npm run typecheck
 npm run build
+cd ..
 .venv/bin/python -m compileall backend
 ```
 
