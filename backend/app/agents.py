@@ -20,9 +20,11 @@ from .word_utils import (
     normalize_word,
     same_word,
     starts_with_prefix,
+    word_validation_failure_reason,
 )
 
-MAX_LLM_ATTEMPTS = 3
+MAX_LLM_ATTEMPTS = 5
+LLM_RETRY_DELAY_SECONDS = 0.5
 CAPACITY_RETRY_DELAYS_SECONDS = [2.0, 5.0]
 
 logger = logging.getLogger("ai_contact.prompts")
@@ -58,6 +60,55 @@ def _format_exception(error: Exception) -> str:
     if isinstance(error, MissingApiKeyError):
         return str(error)
     return f"{type(error).__name__}: {error}"
+
+
+def _candidate_signature(candidate: dict[str, Any]) -> str:
+    return json.dumps(candidate, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _build_retry_feedback(previous_answer: dict[str, Any], reason: str) -> str:
+    previous_answer_json = json.dumps(
+        previous_answer,
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+    return "\n".join(
+        [
+            f"Previous answer: {previous_answer_json}",
+            f"This is not valid because: {reason}",
+            "This answer is not acceptable.",
+            "Generate a new valid answer that fixes the validation failure.",
+            "Do not repeat the previous answer.",
+        ]
+    )
+
+
+async def _sleep_before_retry(
+    *,
+    task_name: str,
+    prompt: RenderedPrompt,
+    provider: LLMProvider,
+    model: str,
+    attempt: int,
+    reason: str,
+    delay_seconds: float = LLM_RETRY_DELAY_SECONDS,
+    event_type: str = "llm_retry_scheduled",
+) -> None:
+    if attempt >= MAX_LLM_ATTEMPTS - 1:
+        return
+    write_event(
+        event_type,
+        taskName=task_name,
+        promptId=prompt.id,
+        promptVersion=prompt.version,
+        provider=provider.name,
+        model=model,
+        attemptNumber=attempt + 1,
+        retryDelaySeconds=delay_seconds,
+        reason=reason,
+    )
+    await asyncio.sleep(delay_seconds)
 
 
 def _log_prompt_call(
@@ -133,10 +184,12 @@ async def _with_repair(
         )
 
     last_error = "Unknown LLM error."
+    repair_feedback = ""
     api_failed = False
     validation_failed = False
+    rejected_answer_signatures: set[str] = set()
     for attempt in range(MAX_LLM_ATTEMPTS):
-        prompt = build_prompt(attempt, last_error if validation_failed else "")
+        prompt = build_prompt(attempt, repair_feedback if validation_failed else "")
         _log_prompt_call(
             task_name=task_name,
             prompt=prompt,
@@ -181,7 +234,9 @@ async def _with_repair(
                 error=error,
             )
             if attempt < MAX_LLM_ATTEMPTS - 1:
-                retry_delay = error.retry_after_seconds or CAPACITY_RETRY_DELAYS_SECONDS[min(attempt, len(CAPACITY_RETRY_DELAYS_SECONDS) - 1)]
+                retry_delay = error.retry_after_seconds or CAPACITY_RETRY_DELAYS_SECONDS[
+                    min(attempt, len(CAPACITY_RETRY_DELAYS_SECONDS) - 1)
+                ]
                 write_event(
                     "llm_api_retry_scheduled",
                     taskName=task_name,
@@ -223,6 +278,15 @@ async def _with_repair(
                 attemptNumber=attempt + 1,
                 error=error,
             )
+            await _sleep_before_retry(
+                task_name=task_name,
+                prompt=prompt,
+                provider=provider,
+                model=model,
+                attempt=attempt,
+                reason=last_error,
+                event_type="llm_api_retry_scheduled",
+            )
             continue
 
         write_event(
@@ -235,12 +299,18 @@ async def _with_repair(
             attemptNumber=attempt + 1,
             candidate=candidate,
         )
-        try:
-            ok, value, reason = validate(candidate)
-        except (ValueError, KeyError, TypeError) as error:
+        candidate_signature = _candidate_signature(candidate)
+        if candidate_signature in rejected_answer_signatures:
             ok = False
             value = None
-            reason = f"Validation raised {type(error).__name__}: {error}"
+            reason = "Generated answer is the same as a previously rejected answer."
+        else:
+            try:
+                ok, value, reason = validate(candidate)
+            except (ValueError, KeyError, TypeError) as error:
+                ok = False
+                value = None
+                reason = f"Validation raised {type(error).__name__}: {error}"
         if ok:
             write_event(
                 "llm_validation_success",
@@ -255,7 +325,9 @@ async def _with_repair(
             return value
 
         validation_failed = True
+        rejected_answer_signatures.add(candidate_signature)
         last_error = reason or "Model JSON did not satisfy validation rules."
+        repair_feedback = _build_retry_feedback(candidate, last_error)
         _log_validation_failure(
             task_name=task_name,
             prompt=prompt,
@@ -264,6 +336,15 @@ async def _with_repair(
             attempt=attempt,
             reason=last_error,
             candidate=candidate,
+        )
+        await _sleep_before_retry(
+            task_name=task_name,
+            prompt=prompt,
+            provider=provider,
+            model=model,
+            attempt=attempt,
+            reason=last_error,
+            event_type="llm_validation_retry_scheduled",
         )
 
     if validation_failed and not api_failed:
@@ -278,9 +359,10 @@ async def choose_secret_word(
     language: str,
 ) -> dict[str, str]:
     def validate(candidate: dict[str, Any]) -> tuple[bool, dict[str, str] | None, str]:
-        word = normalize_word(candidate.get("word"), language)
-        if not is_valid_word(word, language):
-            return False, None, "Invalid secret word."
+        raw_word = candidate.get("word")
+        word = normalize_word(raw_word, language)
+        if not is_valid_word(raw_word, language):
+            return False, None, word_validation_failure_reason(raw_word, language, "word")
         return True, {"word": word}, ""
 
     return await _with_repair(
@@ -317,16 +399,21 @@ async def generate_player_move(
     used = {normalize_word(word, language) for word in used_words}
 
     def validate(candidate: dict[str, Any]) -> tuple[bool, PlayerMove | None, str]:
-        intended_word = normalize_word(candidate.get("intendedWord"), language)
+        raw_intended_word = candidate.get("intendedWord")
+        intended_word = normalize_word(raw_intended_word, language)
         clue = str(candidate.get("clue") or "").strip()
-        if not is_valid_word(intended_word, language):
-            return False, None, "Invalid intended word."
+        if not is_valid_word(raw_intended_word, language):
+            return (
+                False,
+                None,
+                word_validation_failure_reason(raw_intended_word, language, "intendedWord"),
+            )
         if not starts_with_prefix(intended_word, current_prefix, language):
             return (
                 False,
                 None,
                 (
-                    f"Intended word must begin exactly with currentPrefix={current_prefix!r} "
+                    f"intendedWord={intended_word!r} does not start with required currentPrefix={current_prefix!r} "
                     "after trim/lowercase normalization."
                 ),
             )
@@ -334,12 +421,15 @@ async def generate_player_move(
             return (
                 False,
                 None,
-                "Selected intended word is already in usedWords. Choose a different normal word with the same prefix.",
+                (
+                    f"intendedWord={intended_word!r} is already in usedWords/forbiddenWords. "
+                    "Choose a different normal word with the same prefix."
+                ),
             )
         if not clue:
-            return False, None, "Missing clue."
+            return False, None, "clue is empty or missing."
         if clue_mentions_word(clue, intended_word, language):
-            return False, None, "Clue contains intended word."
+            return False, None, f"clue directly mentions intendedWord={intended_word!r}."
         return True, PlayerMove(intendedWord=intended_word, clue=clue), ""
 
     return await _with_repair(
@@ -386,19 +476,43 @@ async def word_master_guess(
 
     def validate(candidate: dict[str, Any]) -> tuple[bool, MasterGuess, str]:
         raw_guess = candidate.get("guess")
-        confidence = float(candidate.get("confidence") or 0)
-        if raw_guess is None or str(raw_guess).strip().lower() in {"", "null", "none", "no guess", "нет", "нет догадки"}:
-            return False, MasterGuess(guess="", confidence=0), "Word Master must choose one concrete guess."
+        refused_values = {"", "null", "none", "no guess", "нет", "нет догадки"}
+        if raw_guess is None or str(raw_guess).strip().lower() in refused_values:
+            return (
+                False,
+                MasterGuess(guess="", confidence=0),
+                "guess is empty or a refusal; Word Master must choose one concrete guess.",
+            )
+        try:
+            confidence = float(candidate.get("confidence") or 0)
+        except (TypeError, ValueError):
+            return False, MasterGuess(guess="", confidence=0), "confidence must be a number from 0 to 1."
 
         guess = normalize_word(raw_guess, language)
-        if not is_valid_word(guess, language):
-            return False, MasterGuess(guess="", confidence=0), "Invalid guess."
+        if not is_valid_word(raw_guess, language):
+            return (
+                False,
+                MasterGuess(guess="", confidence=0),
+                word_validation_failure_reason(raw_guess, language, "guess"),
+            )
         if not starts_with_prefix(guess, current_prefix, language):
-            return False, MasterGuess(guess="", confidence=0), "Guess misses prefix."
+            return (
+                False,
+                MasterGuess(guess="", confidence=0),
+                f"guess={guess!r} does not start with required currentPrefix={current_prefix!r}.",
+            )
         if guess in used:
-            return False, MasterGuess(guess="", confidence=0), "Guess is already in usedWords."
+            return (
+                False,
+                MasterGuess(guess="", confidence=0),
+                f"guess={guess!r} is already in usedWords/forbiddenWords.",
+            )
         if same_word(guess, secret, language):
-            return False, MasterGuess(guess="", confidence=0), "Guess equals the secret word."
+            return (
+                False,
+                MasterGuess(guess="", confidence=0),
+                "guess equals the secret word; choose a different valid word.",
+            )
         return True, MasterGuess(guess=guess, confidence=max(0, min(1, confidence))), ""
 
     return await _with_repair(
@@ -444,13 +558,19 @@ async def guess_partner_word(
     used = {normalize_word(word, language) for word in used_words}
 
     def validate(candidate: dict[str, Any]) -> tuple[bool, PartnerGuess | None, str]:
-        guess = normalize_word(candidate.get("guess"), language)
-        if not is_valid_word(guess, language):
-            return False, None, "Invalid partner guess."
+        raw_guess = candidate.get("guess")
+        guess = normalize_word(raw_guess, language)
+        if not is_valid_word(raw_guess, language):
+            return False, None, word_validation_failure_reason(raw_guess, language, "guess")
         if not starts_with_prefix(guess, current_prefix, language):
-            return False, None, "Partner guess misses prefix."
+            return False, None, f"guess={guess!r} does not start with required currentPrefix={current_prefix!r}."
         if guess in used:
-            return False, None, "Partner guess already used. Choose a different word with the same prefix."
+            return (
+                False,
+                None,
+                f"guess={guess!r} is already in usedWords/forbiddenWords. "
+                "Choose a different word with the same prefix.",
+            )
         return True, PartnerGuess(guess=guess), ""
 
     return await _with_repair(

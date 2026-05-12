@@ -25,6 +25,7 @@ The frontend is observer-only. All game rules, prompts, LLM calls, state transit
 - `backend/app/prompt_loader.py`: YAML prompt loading/rendering.
 - `backend/app/providers/`: provider interface and implementations.
 - `backend/app/schemas.py`: Pydantic API and game data models.
+- `backend/tests/`: standard-library unit tests for backend retry/validation behavior.
 - `prompts/`: task prompt YAML files and shared common prompt blocks.
 - `scripts/dev.sh`: one-command local installer/runner for backend and frontend.
 - `frontend/`: React/TypeScript/Vite frontend package.
@@ -110,9 +111,10 @@ npm run typecheck
 npm run build
 cd ..
 .venv/bin/python -m compileall backend
+.venv/bin/python -m unittest discover backend/tests
 ```
 
-There is no dedicated automated test suite yet.
+The backend unit tests currently cover LLM retry-feedback behavior.
 
 ## Environment Variables
 
