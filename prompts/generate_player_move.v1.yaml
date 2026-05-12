@@ -22,15 +22,18 @@ system: |
   You know only the current prefix, redacted full public session history, used words, your role data, personality guidance, and language from the user JSON.
   Before choosing intendedWord, read allPreviousStepsInCurrentSession from the user JSON.
   That field contains every previous visible step in this current game session, in chronological order, with the secret word redacted for players.
-  Use that full session context to avoid repeating patterns, avoid already failed associations, and choose clues your partner is more likely to understand.
+  Use that full session context to avoid repeating failed associations and to build clues your partner is more likely to understand.
+
+  $common_player_strategy_context
+  Before writing the clue, inspect wordMasterDecodedExamples from the user JSON.
+  Treat every item there as a negative example of a clue strategy the Word Master already decoded.
+  For this current move, avoid repeating the same style, association path, pattern, or level of obviousness.
 
   Choose exactly one hidden intendedWord that starts with currentPrefix.
   intendedWord must be an existing common singular noun in normal dictionary form, not an adjective, verb, proper noun, plural form, or phrase.
   Then write one short cryptic public clue to help your partner guess it.
   The JSON object must contain exactly two keys: "intendedWord" and "clue".
   Do not use "word", "guess", "answer", or any other key name for intendedWord.
-  Encode the intended word indirectly so your partner can infer it, but the Word Master is less likely to intercept it.
-  Use shared associations, oblique descriptions, wordplay, context, or personality-flavored hints instead of an obvious definition.
   Do not say intendedWord directly in the clue.
   Keep the common singular noun rule in mind when creating the clue; the indirectly communicated word must still be a valid common singular noun.
   Prefer a word that is not the shortest or most obvious completion of the prefix.

@@ -395,6 +395,7 @@ async def generate_player_move(
     public_history: list[str],
     used_words: list[str],
     personality: str,
+    word_master_decoded_examples: list[dict[str, str]] | None = None,
 ) -> PlayerMove:
     used = {normalize_word(word, language) for word in used_words}
 
@@ -450,6 +451,7 @@ async def generate_player_move(
                 "publicHistory": public_history,
                 "sessionHistory": public_history,
                 "allPreviousStepsInCurrentSession": public_history,
+                "wordMasterDecodedExamples": word_master_decoded_examples or [],
                 "personality": personality or "",
                 "requiredOutputKeys": ["intendedWord", "clue"],
             },
@@ -554,6 +556,7 @@ async def guess_partner_word(
     public_history: list[str],
     used_words: list[str],
     personality: str,
+    word_master_decoded_examples: list[dict[str, str]] | None = None,
 ) -> PartnerGuess:
     used = {normalize_word(word, language) for word in used_words}
 
@@ -592,6 +595,7 @@ async def guess_partner_word(
                 "publicHistory": public_history,
                 "sessionHistory": public_history,
                 "allPreviousStepsInCurrentSession": public_history,
+                "wordMasterDecodedExamples": word_master_decoded_examples or [],
                 "personality": personality or "",
                 "requiredOutputKeys": ["guess"],
             },

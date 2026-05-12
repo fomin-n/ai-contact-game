@@ -251,6 +251,34 @@ class GameManager:
             history.append(f"{index}. {role_label(state.language, message.role)}: {text}")
         return history
 
+    def _word_master_decoded_examples(self, state: GameState) -> list[dict[str, str]]:
+        examples = []
+        current_clue: dict[str, str] | None = None
+        current_master_guess = ""
+        for message in state.messages:
+            event_type = (message.metadata or {}).get("eventType")
+            if event_type == "clue" and message.role in ("playerA", "playerB"):
+                current_clue = {
+                    "actingPlayer": role_label(state.language, message.role),
+                    "clue": message.text,
+                }
+                current_master_guess = ""
+                continue
+            if event_type == "master-guess":
+                current_master_guess = str((message.metadata or {}).get("word") or "").strip()
+                continue
+            if event_type == "blocked" and current_clue and current_master_guess:
+                examples.append(
+                    {
+                        **current_clue,
+                        "decodedWord": current_master_guess,
+                        "whyNegative": "Word Master decoded this clue and blocked contact.",
+                    }
+                )
+                current_clue = None
+                current_master_guess = ""
+        return examples
+
     def _add_used_words(self, state: GameState, words: list[str]) -> None:
         seen = {normalize_word(word, state.language) for word in state.usedWords}
         for word in words:
@@ -448,6 +476,7 @@ class GameManager:
             public_history=self._agent_history(state, include_secret=False),
             used_words=state.usedWords,
             personality=actor_personality,
+            word_master_decoded_examples=self._word_master_decoded_examples(state),
         )
         intended_word = normalize_word(move.intendedWord, state.language)
         clue = move.clue.strip()
@@ -530,6 +559,7 @@ class GameManager:
             public_history=self._agent_history(state, include_secret=False),
             used_words=state.usedWords,
             personality=partner_personality,
+            word_master_decoded_examples=self._word_master_decoded_examples(state),
         )
         guessed_word = normalize_word(partner_answer.guess, state.language)
         write_event(
