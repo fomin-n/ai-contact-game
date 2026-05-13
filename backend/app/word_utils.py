@@ -48,7 +48,7 @@ def same_word(a: object, b: object, language: Language) -> bool:
 
 
 def first_letters(word: str, count: int) -> str:
-    return "".join(list(word)[:count])
+    return word[:count]
 
 
 def clue_mentions_word(clue: str, word: str, language: Language) -> bool:

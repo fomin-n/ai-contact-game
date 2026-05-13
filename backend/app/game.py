@@ -48,6 +48,7 @@ COPY = {
         "blocked": "Word Master guessed. Contact broken.",
         "failedIntercept": "There is contact!",
         "wordMasterNoGuess": "Word Master couldn't guess.",
+        "wordMasterDecodedBlockedReason": "Word Master decoded this clue and blocked contact.",
         "gameOver": "Game over.",
         "maxTurns": "Max turns reached.",
         "playersFound": "Players found the secret word.",
@@ -88,6 +89,7 @@ COPY = {
         "blocked": "Ведущий угадал. Контакт оборван.",
         "failedIntercept": "Есть контакт!",
         "wordMasterNoGuess": "Ведущий не догадался.",
+        "wordMasterDecodedBlockedReason": "Ведущий расшифровал подсказку и оборвал контакт.",
         "gameOver": "Игра окончена.",
         "maxTurns": "Достигнут лимит ходов.",
         "playersFound": "Игроки нашли секретное слово.",
@@ -142,8 +144,8 @@ class GameManager:
         self._pending_submission: MasterGuess | PlayerMove | PartnerGuess | None = None
         self._state = self._idle_state(
             language="en",
-            player_a_personality="Playful, metaphor-loving, a little theatrical, but concise.",
-            player_b_personality="Sharp, practical, and good at noticing everyday associations.",
+            player_a_personality="",
+            player_b_personality="",
         )
 
     def get_provider_info(self) -> ProviderInfo:
@@ -453,7 +455,7 @@ class GameManager:
                     {
                         **current_clue,
                         "decodedWord": current_master_guess,
-                        "whyNegative": "Word Master decoded this clue and blocked contact.",
+                        "whyNegative": COPY[state.language]["wordMasterDecodedBlockedReason"],
                     }
                 )
                 current_clue = None
@@ -479,8 +481,8 @@ class GameManager:
             [
                 labels["gameOver"],
                 f"{labels['winnerFinal']} {winner}.",
-                f"{labels['secretFinal']} {state.secretWord}",
-                f"{labels['turnsFinal']} {state.turnNumber}",
+                f"{labels['secretFinal']} {state.secretWord}.",
+                f"{labels['turnsFinal']} {state.turnNumber}.",
                 f"{labels['usedWordsFinal']} {', '.join(state.usedWords) or '-'}",
             ]
         )

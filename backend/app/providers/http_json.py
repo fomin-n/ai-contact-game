@@ -129,8 +129,12 @@ async def post_chat_completion(
             request=response.request,
             response=response,
         )
-    payload = response_payload if isinstance(response_payload, dict) else response.json()
-    content = payload.get("choices", [{}])[0].get("message", {}).get("content")
+    if not isinstance(response_payload, dict):
+        raise ValueError(
+            f"Expected a JSON object from {provider_name}, got {type(response_payload).__name__}."
+        )
+    choices = response_payload.get("choices") or []
+    content = choices[0].get("message", {}).get("content") if choices else None
     try:
         return parse_json_object(content)
     except ValueError as error:

@@ -35,7 +35,7 @@ export const rulesCopy = {
 export const copy = {
   en: {
     title: "AI «Contact» game",
-    subtitle: "Whatch LLMs playing «Contact» game",
+    subtitle: "Watch LLMs playing «Contact» game",
     language: "Language",
     settings: "Settings",
     collapseSettings: "Collapse settings",
