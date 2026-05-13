@@ -4,7 +4,7 @@ A small LLM-agent experiment inspired by the Russian word game **"Есть ко�
 
 The game has three modes:
 
-- **Watch AI vs AI**: the Word Master, Player A, and Player B are all AI agents.
+- **AI vs AI**: the Word Master, Player A, and Player B are all AI agents.
 - **Play as Word Master**: you provide the secret word and try to intercept the AI players' clues.
 - **Play as Player A**: you create clues on your turns and guess Player B's clues, while the secret word stays hidden from you.
 
