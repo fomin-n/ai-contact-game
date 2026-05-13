@@ -25,12 +25,12 @@ export const initialProviderInfo: ProviderInfo = {
 
 export const defaultPersonalities: Record<Language, Record<PlayerRole, string>> = {
   en: {
-    playerA: "Playful, metaphor-loving, a little theatrical, but concise.",
-    playerB: "Sharp, practical, and good at noticing everyday associations."
+    playerA: "Prefers scientific and technical vocabulary — physics, chemistry, engineering, mathematics.",
+    playerB: "Draws from sport, medicine, and art — athletic terms, anatomy, musical and visual arts."
   },
   ru: {
-    playerA: "Игривый, образный, немного театральный, но краткий.",
-    playerB: "Внимательный, практичный, хорошо угадывает бытовые ассоциации."
+    playerA: "Предпочитает научно-техническую лексику — физика, химия, инженерия, математика.",
+    playerB: "Черпает слова из спорта, медицины и искусства — спортивные термины, анатомия, музыка и изобразительное искусство."
   }
 };
 
