@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { UserInputParams } from "../../api/gameApi";
 import type { UiCopy } from "../../i18n/copy";
 import type { PendingUserInput } from "../../types/game";
@@ -21,11 +21,13 @@ export function PendingUserInputForm({
   const [guess, setGuess] = useState("");
   const [intendedWord, setIntendedWord] = useState("");
   const [clue, setClue] = useState("");
+  const firstInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setGuess("");
     setIntendedWord("");
     setClue("");
+    window.requestAnimationFrame(() => firstInputRef.current?.focus());
   }, [pendingUserInput.kind, pendingUserInput.currentPrefix, pendingUserInput.clue]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -58,6 +60,7 @@ export function PendingUserInputForm({
             <label className="pending-input-field">
               <span>{labels.intendedWord}</span>
               <input
+                ref={firstInputRef}
                 value={intendedWord}
                 onChange={(event) => setIntendedWord(event.target.value)}
                 disabled={isSubmitting}
@@ -78,6 +81,7 @@ export function PendingUserInputForm({
           </>
         ) : (
           <input
+            ref={firstInputRef}
             value={guess}
             onChange={(event) => setGuess(event.target.value)}
             disabled={isSubmitting}

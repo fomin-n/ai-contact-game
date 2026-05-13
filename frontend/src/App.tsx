@@ -1,17 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppHeader } from "./components/AppHeader";
 import { GameControls } from "./components/GameControls";
 import { GameStats } from "./components/GameStats";
 import { ModelPanel } from "./components/ModelPanel";
 import { Notice } from "./components/Notice";
 import { RulesDialog } from "./components/RulesDialog";
+import { SettingsSidebar } from "./components/SettingsSidebar";
 import { Timeline } from "./components/Timeline";
 import { UsedWordsPanel } from "./components/UsedWordsPanel";
 import { useGameController } from "./hooks/useGameController";
 import { copy, rulesCopy } from "./i18n/copy";
 
+const settingsCollapsedStorageKey = "ai-contact-game:settings-collapsed";
+
+function getInitialSettingsCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(settingsCollapsedStorageKey) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function App() {
   const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(getInitialSettingsCollapsed);
   const {
     activeProviderInfo,
     customSecretWord,
@@ -40,6 +52,19 @@ function App() {
   const activeRules = rulesCopy[language];
   const statusLabel = visibleLabels[game.status];
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(settingsCollapsedStorageKey, String(isSettingsCollapsed));
+    } catch {
+      // localStorage is optional for this UI preference.
+    }
+  }, [isSettingsCollapsed]);
+
+  function handleStartGame() {
+    startGame();
+    setIsSettingsCollapsed(true);
+  }
+
   return (
     <main className="app-shell">
       <AppHeader
@@ -54,8 +79,12 @@ function App() {
 
       {isRulesOpen && <RulesDialog rules={activeRules} onClose={() => setIsRulesOpen(false)} />}
 
-      <section className="game-board">
-        <aside className="side-column">
+      <section className={`game-board ${isSettingsCollapsed ? "settings-collapsed" : ""}`}>
+        <SettingsSidebar
+          labels={inputLabels}
+          isCollapsed={isSettingsCollapsed}
+          onToggle={() => setIsSettingsCollapsed((value) => !value)}
+        >
           <GameControls
             labels={inputLabels}
             language={language}
@@ -71,7 +100,7 @@ function App() {
             onPlayerAPersonalityChange={setPlayerAPersonality}
             onPlayerBPersonalityChange={setPlayerBPersonality}
             onCustomSecretWordChange={setCustomSecretWord}
-            onStart={startGame}
+            onStart={handleStartGame}
             onReset={resetGame}
           />
 
@@ -82,7 +111,7 @@ function App() {
           )}
 
           <UsedWordsPanel labels={visibleLabels} usedWords={game.usedWords} />
-        </aside>
+        </SettingsSidebar>
 
         <section className="panel timeline-panel main-column">
           <GameStats

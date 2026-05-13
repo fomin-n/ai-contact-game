@@ -6,6 +6,7 @@ import time
 import uuid
 
 from .agents import (
+    LLMGameError,
     LLMValidationError,
     choose_secret_word,
     generate_player_move,
@@ -46,6 +47,7 @@ COPY = {
         "contactFailed": "Contact failed.",
         "blocked": "Word Master guessed. Contact broken.",
         "failedIntercept": "There is contact!",
+        "wordMasterNoGuess": "Word Master couldn't guess.",
         "gameOver": "Game over.",
         "maxTurns": "Max turns reached.",
         "playersFound": "Players found the secret word.",
@@ -85,6 +87,7 @@ COPY = {
         "contactFailed": "Контакт не состоялся.",
         "blocked": "Ведущий угадал. Контакт оборван.",
         "failedIntercept": "Есть контакт!",
+        "wordMasterNoGuess": "Ведущий не догадался.",
         "gameOver": "Игра окончена.",
         "maxTurns": "Достигнут лимит ходов.",
         "playersFound": "Игроки нашли секретное слово.",
@@ -709,52 +712,73 @@ class GameManager:
                 raise RuntimeError("Expected a Word Master guess submission.")
             master_guess = master_guess_result
         else:
-            master_guess = await word_master_guess(
-                provider=self.providers.word_master_provider,
-                models=self.models,
-                language=state.language,
-                secret_word=state.secretWord,
-                current_prefix=state.currentPrefix,
-                clue=clue,
-                public_history=self._agent_history(state, include_secret=True),
-                used_words=state.usedWords,
-            )
-        master_guess_word = normalize_word(master_guess.guess, state.language)
-        write_event(
-            "word_master_guess_generated",
-            runId=run_id,
-            guess=master_guess_word,
-            rawGuess=master_guess,
-        )
-        block_text = (
-            f"Это не {master_guess_word}!"
-            if state.language == "ru"
-            else f"This is not {master_guess_word}!"
-        )
-        if not await self._append_message(
-            run_id,
-            "wordMaster",
-            block_text,
-            {"eventType": "master-guess", "word": master_guess_word},
-        ):
-            return
+            try:
+                master_guess = await word_master_guess(
+                    provider=self.providers.word_master_provider,
+                    models=self.models,
+                    language=state.language,
+                    secret_word=state.secretWord,
+                    current_prefix=state.currentPrefix,
+                    clue=clue,
+                    public_history=self._agent_history(state, include_secret=True),
+                    used_words=state.usedWords,
+                )
+            except LLMGameError as error:
+                master_guess = None
+                write_event(
+                    "word_master_guess_unavailable",
+                    runId=run_id,
+                    error=error,
+                    clue=clue,
+                    prefix=state.currentPrefix,
+                    state=state,
+                )
 
-        def add_master_guess(next_state: GameState) -> None:
-            self._add_used_words(next_state, [master_guess_word])
-
-        if not await self._mutate(run_id, add_master_guess):
-            return
-
-        if same_word(master_guess_word, intended_word, state.language):
-            def block_contact(next_state: GameState) -> None:
-                self._add_used_words(next_state, [intended_word])
-                next_state.currentTurn = partner
-                next_state.turnNumber += 1
-
-            if not await self._append_message(run_id, "system", labels["blocked"], {"eventType": "blocked"}):
+        if master_guess is None:
+            if not await self._append_message(
+                run_id,
+                "wordMaster",
+                labels["wordMasterNoGuess"],
+                {"eventType": "master-no-guess"},
+            ):
                 return
-            await self._mutate(run_id, block_contact)
-            return
+        else:
+            master_guess_word = normalize_word(master_guess.guess, state.language)
+            write_event(
+                "word_master_guess_generated",
+                runId=run_id,
+                guess=master_guess_word,
+                rawGuess=master_guess,
+            )
+            block_text = (
+                f"Это не {master_guess_word}!"
+                if state.language == "ru"
+                else f"This is not {master_guess_word}!"
+            )
+            if not await self._append_message(
+                run_id,
+                "wordMaster",
+                block_text,
+                {"eventType": "master-guess", "word": master_guess_word},
+            ):
+                return
+
+            def add_master_guess(next_state: GameState) -> None:
+                self._add_used_words(next_state, [master_guess_word])
+
+            if not await self._mutate(run_id, add_master_guess):
+                return
+
+            if same_word(master_guess_word, intended_word, state.language):
+                def block_contact(next_state: GameState) -> None:
+                    self._add_used_words(next_state, [intended_word])
+                    next_state.currentTurn = partner
+                    next_state.turnNumber += 1
+
+                if not await self._append_message(run_id, "system", labels["blocked"], {"eventType": "blocked"}):
+                    return
+                await self._mutate(run_id, block_contact)
+                return
 
         if not await self._append_message(
             run_id,

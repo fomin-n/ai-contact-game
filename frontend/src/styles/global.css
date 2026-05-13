@@ -14,7 +14,14 @@
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
+html,
+#root {
+  height: 100%;
+  overflow: hidden;
 }
 
 button,
@@ -72,8 +79,8 @@ p {
 }
 
 h1 {
-  font-size: clamp(2rem, 4vw, 4rem);
-  line-height: 0.98;
+  font-size: clamp(1.55rem, 2.6vw, 2.45rem);
+  line-height: 1;
   letter-spacing: 0;
 }
 
@@ -103,7 +110,7 @@ input {
 }
 
 textarea {
-  min-height: 104px;
+  min-height: 80px;
   resize: vertical;
   padding: 10px 12px;
   line-height: 1.45;
@@ -118,16 +125,27 @@ button:focus-visible {
 }
 
 .app-shell {
-  width: min(1440px, calc(100% - 32px));
+  width: min(1480px, calc(100% - 24px));
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
   margin: 0 auto;
-  padding: 32px 0 48px;
+  overflow: hidden;
+  padding: 16px 0;
 }
 
 .game-board {
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.game-board.settings-collapsed {
+  grid-template-columns: 58px minmax(0, 1fr);
 }
 
 .side-column {
@@ -137,6 +155,7 @@ button:focus-visible {
 
 .main-column {
   min-width: 0;
+  min-height: 0;
 }
 
 .panel {
@@ -152,12 +171,18 @@ button:focus-visible {
 
 @media (max-width: 780px) {
   .app-shell {
-    width: min(100% - 24px, 1180px);
-    padding-top: 22px;
+    width: min(100% - 16px, 1180px);
+    padding: 10px 0;
+    gap: 10px;
   }
 
   .game-board {
     display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .game-board.settings-collapsed {
     grid-template-columns: 1fr;
   }
 }

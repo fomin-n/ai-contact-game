@@ -1,5 +1,6 @@
 import type { UiCopy } from "../../i18n/copy";
 import type { HumanRole, Language } from "../../types/game";
+import { ModeSegmentedControl } from "../ModeSegmentedControl";
 
 type GameControlsProps = {
   labels: UiCopy;
@@ -52,18 +53,12 @@ export function GameControls({
         </select>
       </label>
 
-      <label className="field">
-        <span>{labels.gameMode}</span>
-        <select
-          value={humanRole}
-          onChange={(event) => onHumanRoleChange(event.target.value as HumanRole)}
-          disabled={isDisabled}
-        >
-          <option value="none">{labels.modeNone}</option>
-          <option value="wordMaster">{labels.modeWordMaster}</option>
-          <option value="playerA">{labels.modePlayerA}</option>
-        </select>
-      </label>
+      <ModeSegmentedControl
+        labels={labels}
+        value={humanRole}
+        disabled={isDisabled}
+        onChange={onHumanRoleChange}
+      />
 
       <label className="field">
         <span>{labels.optionalSecretWord}</span>
@@ -90,7 +85,6 @@ export function GameControls({
           value={playerAPersonality}
           onChange={(event) => onPlayerAPersonalityChange(event.target.value)}
           disabled={isDisabled}
-          rows={4}
         />
       </label>
 
@@ -100,7 +94,6 @@ export function GameControls({
           value={playerBPersonality}
           onChange={(event) => onPlayerBPersonalityChange(event.target.value)}
           disabled={isDisabled}
-          rows={4}
         />
       </label>
 

@@ -37,6 +37,9 @@ export const copy = {
     title: "AI «Contact» game",
     subtitle: "Whatch LLMs playing «Contact» game",
     language: "Language",
+    settings: "Settings",
+    collapseSettings: "Collapse settings",
+    expandSettings: "Expand settings",
     english: "English",
     russian: "Russian",
     playerA: "Player A",
@@ -79,12 +82,16 @@ export const copy = {
     encryptedClue: "Encrypted clue",
     encryptedCluePlaceholder: "Encrypted clue",
     submit: "Submit",
-    submitting: "Submitting..."
+    submitting: "Submitting...",
+    emptyTimeline: "Game not started yet"
   },
   ru: {
     title: "AI «Есть контакт»",
     subtitle: "LLM играют в «Есть контакт»",
     language: "Язык",
+    settings: "Настройки",
+    collapseSettings: "Свернуть настройки",
+    expandSettings: "Развернуть настройки",
     english: "English",
     russian: "Русский",
     playerA: "Игрок A",
@@ -129,7 +136,8 @@ export const copy = {
     encryptedClue: "Зашифрованная подсказка",
     encryptedCluePlaceholder: "Зашифрованная подсказка",
     submit: "Отправить",
-    submitting: "Отправка..."
+    submitting: "Отправка...",
+    emptyTimeline: "Игра ещё не началась"
   }
 } satisfies Record<Language, Record<string, string>>;
 

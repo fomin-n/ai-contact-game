@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Callable
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import AsyncMock, patch
 
 from backend.app.config import AgentProviderConfig
 from backend.app.game import GameManager
@@ -256,5 +257,35 @@ class HumanModeTests(IsolatedAsyncioTestCase):
             state = await manager.get_state()
             self.assertIsNotNone(state.pendingUserInput)
             self.assertEqual(len(state.messages), message_count)
+        finally:
+            await manager.reset()
+
+    async def test_ai_word_master_failure_continues_to_partner_guess(self) -> None:
+        manager = build_manager(
+            word_master=QueueProvider(
+                [{"guess": "library", "confidence": 0.5} for _ in range(5)]
+            ),
+            player_a=QueueProvider(
+                [{"intendedWord": "carrot", "clue": "Orange rabbit snack."}]
+            ),
+            player_b=QueueProvider([{"guess": "carrot"}]),
+        )
+        try:
+            with patch("backend.app.agents._sleep_before_retry", new_callable=AsyncMock):
+                await manager.start(start_request(secretWord="canyon"))
+                state = await wait_for_state(
+                    manager,
+                    lambda game: any(
+                        (message.metadata or {}).get("eventType") == "partner-guess"
+                        for message in game.messages
+                    ),
+                )
+
+            event_types = [(message.metadata or {}).get("eventType") for message in state.messages]
+            self.assertIn("master-no-guess", event_types)
+            self.assertIn("failed-intercept", event_types)
+            self.assertIn("partner-guess", event_types)
+            self.assertIn("Word Master couldn't guess.", [message.text for message in state.messages])
+            self.assertNotIn("library", state.usedWords)
         finally:
             await manager.reset()

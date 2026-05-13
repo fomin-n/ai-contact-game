@@ -1,0 +1,16 @@
+.sidebar-collapse-button {
+  width: 38px;
+  min-height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border-color: #c7c0b1;
+  color: #38413b;
+  font-weight: 900;
+}
+
+.sidebar-collapse-button span {
+  display: block;
+  transform: translateY(-1px);
+}

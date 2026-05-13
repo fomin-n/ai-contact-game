@@ -1,5 +1,8 @@
 .timeline-panel {
-  padding: 18px;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  padding: 14px;
 }
 
 .timeline-panel header {
@@ -7,17 +10,23 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .timeline {
   display: grid;
   gap: 12px;
-  min-height: 620px;
-  max-height: calc(100vh - 178px);
+  min-height: 0;
+  max-height: none;
   overflow: auto;
-  padding: 4px 4px 2px;
+  padding: 4px 6px 2px;
   align-content: start;
+  scroll-behavior: smooth;
+}
+
+.timeline.timeline-empty {
+  align-content: center;
+  justify-items: center;
 }
 
 .message {
@@ -100,7 +109,8 @@
 }
 
 .pending-input {
-  border-style: dashed;
+  border: 2px solid #235a50;
+  box-shadow: 0 10px 22px rgba(35, 90, 80, 0.16);
 }
 
 .pending-input-form {
@@ -182,8 +192,7 @@
 
 @media (max-width: 780px) {
   .timeline {
-    min-height: 420px;
-    max-height: 68vh;
+    min-height: 0;
   }
 
   .message {

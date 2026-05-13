@@ -1,7 +1,7 @@
 .controls {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 14px;
 }
 
 .field {
@@ -11,7 +11,7 @@
 
 .field span {
   color: #4e5752;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   font-weight: 700;
 }
 
@@ -22,7 +22,7 @@
 }
 
 .button-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
