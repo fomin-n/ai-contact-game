@@ -5,11 +5,13 @@ import {
   getGameState,
   resetGame as resetGameApi,
   startGame as startGameApi,
-  type StartGameParams
+  submitUserInput as submitUserInputApi,
+  type StartGameParams,
+  type UserInputParams
 } from "../api/gameApi";
 import { DEFAULT_MAX_TURNS, POLLING_INTERVAL_MS } from "../constants/gameConstants";
 import { createEmptyState, defaultPersonalities, initialProviderInfo } from "../config/defaults";
-import type { GameState, Language, ProviderInfo } from "../types/game";
+import type { GameState, HumanRole, Language, ProviderInfo } from "../types/game";
 
 const configQueryKey = ["config"] as const;
 const gameStateQueryKey = ["gameState"] as const;
@@ -24,9 +26,13 @@ type UseGameControllerResult = {
   customSecretWord: string;
   game: GameState;
   handleLanguageChange: (language: Language) => void;
+  handleHumanRoleChange: (role: HumanRole) => void;
   isRequesting: boolean;
   isRunning: boolean;
+  isStartDisabled: boolean;
+  isSubmittingUserInput: boolean;
   language: Language;
+  humanRole: HumanRole;
   playerAPersonality: string;
   playerBPersonality: string;
   resetGame: () => void;
@@ -34,6 +40,8 @@ type UseGameControllerResult = {
   setPlayerAPersonality: (value: string) => void;
   setPlayerBPersonality: (value: string) => void;
   startGame: () => void;
+  submitUserInput: (params: UserInputParams) => void;
+  userInputError: string | null;
   uiError: string | null;
 };
 
@@ -41,10 +49,12 @@ export function useGameController(): UseGameControllerResult {
   const queryClient = useQueryClient();
   const initialSyncDone = useRef(false);
   const [language, setLanguage] = useState<Language>("en");
+  const [humanRole, setHumanRole] = useState<HumanRole>("none");
   const [playerAPersonality, setPlayerAPersonality] = useState(defaultPersonalities.en.playerA);
   const [playerBPersonality, setPlayerBPersonality] = useState(defaultPersonalities.en.playerB);
   const [customSecretWord, setCustomSecretWord] = useState("");
   const [mutationError, setMutationError] = useState<string | null>(null);
+  const [userInputError, setUserInputError] = useState<string | null>(null);
 
   const configQuery = useQuery({
     queryKey: configQueryKey,
@@ -106,12 +116,28 @@ export function useGameController(): UseGameControllerResult {
     }
   });
 
+  const userInputMutation = useMutation({
+    mutationFn: (params: UserInputParams) => submitUserInputApi(params),
+    onMutate: () => {
+      setUserInputError(null);
+    },
+    onSuccess: (state) => {
+      queryClient.setQueryData(gameStateQueryKey, state);
+      setUserInputError(null);
+      void queryClient.invalidateQueries({ queryKey: gameStateQueryKey });
+    },
+    onError: (error) => {
+      setUserInputError(getErrorMessage(error));
+    }
+  });
+
   useEffect(() => {
     const state = gameStateQuery.data;
     if (!state || initialSyncDone.current) return;
 
     initialSyncDone.current = true;
     setLanguage(state.language);
+    setHumanRole(state.humanRole);
     setPlayerAPersonality(state.playerAPersonality || defaultPersonalities[state.language].playerA);
     setPlayerBPersonality(state.playerBPersonality || defaultPersonalities[state.language].playerB);
   }, [gameStateQuery.data]);
@@ -127,12 +153,22 @@ export function useGameController(): UseGameControllerResult {
     }
   }
 
+  function handleHumanRoleChange(nextHumanRole: HumanRole) {
+    setHumanRole(nextHumanRole);
+    setMutationError(null);
+    setUserInputError(null);
+    if (nextHumanRole === "playerA") {
+      setCustomSecretWord("");
+    }
+  }
+
   function startGame() {
     startGameMutation.mutate({
       language,
       playerAPersonality,
       playerBPersonality,
-      secretWord: customSecretWord.trim() || undefined,
+      humanRole,
+      secretWord: humanRole === "playerA" ? undefined : customSecretWord.trim() || undefined,
       maxTurns: DEFAULT_MAX_TURNS
     });
   }
@@ -141,19 +177,31 @@ export function useGameController(): UseGameControllerResult {
     resetGameMutation.mutate();
   }
 
+  function submitUserInput(params: UserInputParams) {
+    userInputMutation.mutate(params);
+  }
+
   const queryError = getErrorMessage(configQuery.error) ?? getErrorMessage(gameStateQuery.error);
   const uiError = mutationError ?? queryError;
   const isRequesting = startGameMutation.isPending || resetGameMutation.isPending;
   const isRunning = game.status === "running";
+  const isStartDisabled =
+    isRunning ||
+    isRequesting ||
+    (humanRole === "wordMaster" && customSecretWord.trim().length === 0);
 
   return {
     activeProviderInfo,
     customSecretWord,
     game,
     handleLanguageChange,
+    handleHumanRoleChange,
     isRequesting,
     isRunning,
+    isStartDisabled,
+    isSubmittingUserInput: userInputMutation.isPending,
     language,
+    humanRole,
     playerAPersonality,
     playerBPersonality,
     resetGame,
@@ -161,6 +209,8 @@ export function useGameController(): UseGameControllerResult {
     setPlayerAPersonality,
     setPlayerBPersonality,
     startGame,
+    submitUserInput,
+    userInputError,
     uiError
   };
 }

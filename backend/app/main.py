@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from .config import load_agent_model_config, load_agent_provider_config
 from .game import GameManager
-from .schemas import ConfigResponse, StartGameRequest
+from .schemas import ConfigResponse, StartGameRequest, UserInputRequest
 
 load_dotenv()
 
@@ -54,3 +54,11 @@ async def start(request: StartGameRequest):
 @app.post("/api/game/reset")
 async def reset():
     return await game_manager.reset()
+
+
+@app.post("/api/game/user-input")
+async def user_input(request: UserInputRequest):
+    try:
+        return await game_manager.submit_user_input(request)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error

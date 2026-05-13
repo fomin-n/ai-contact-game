@@ -38,11 +38,13 @@ export function createEmptyState(language: Language, providerInfo: ProviderInfo)
   return {
     status: "idle",
     language,
+    humanRole: "none",
     secretWord: "",
     currentPrefix: "",
     revealedLength: 0,
     usedWords: [],
     messages: [],
+    pendingUserInput: null,
     currentTurn: "playerA",
     turnNumber: 1,
     maxTurns: DEFAULT_MAX_TURNS,

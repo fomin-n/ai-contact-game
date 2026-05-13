@@ -2,20 +2,19 @@
 
 A small LLM-agent experiment inspired by the Russian word game **"Есть контакт" / "Contact"**.
 
-Three AI agents play while you watch:
+The game has three modes:
 
-- **Word Master** secretly chooses a word and tries to intercept clues.
-- **Player A** and **Player B** only know the revealed prefix and try to make contact.
-- The observer sees the secret word, the prefix, used words, and the full chat timeline.
-- The observer may optionally set the secret word before starting; Word Master then plays as if it chose that word.
+- **Watch AI vs AI**: the Word Master, Player A, and Player B are all AI agents.
+- **Play as Word Master**: you provide the secret word and try to intercept the AI players' clues.
+- **Play as Player A**: you create clues on your turns and guess Player B's clues, while the secret word stays hidden from you.
 
-The project is intentionally small: Python runs the game and AI calls, React renders the observer UI.
+The project is intentionally small: Python runs the game rules, validation, turn loop, and AI calls; React renders the UI and sends human inputs back to the backend.
 
 ## Rules
 
 In the original game, a Word Master thinks of a word and reveals its first letter. Other players give clue-like definitions for different words that start with the revealed letter or prefix. If another player understands the clue, they announce contact; the Word Master has a chance to guess and block it. If the players name the same word, the Word Master reveals the next letter. The round ends when the secret word is named.
 
-This project adapts that structure for three LLM agents: one Word Master and two players. The observer sees the secret word and watches the whole exchange as chat messages.
+This project adapts that structure for LLM agents and optional human roles. The backend pauses the game when a human move is needed, validates the submitted word or clue, then resumes the same turn flow.
 
 ## Repository
 

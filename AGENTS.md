@@ -6,11 +6,19 @@ This file is the agent-facing operating guide for `ai-contact-game`. Keep `READM
 
 `ai-contact-game` is a small full-stack LLM-agent game inspired by the Russian word game "Есть контакт" / "Contact".
 
-The observer starts a game from the web UI. Three AI roles then play automatically:
+The web UI supports three modes:
+
+- `none`: observer watches AI vs AI. This is the default and must remain backward-compatible.
+- `wordMaster`: the human provides the secret word and submits Word Master guesses through pending backend input.
+- `playerA`: the human replaces Player A, submits Player A clues, and later guesses Player B clues after failed interceptions.
+
+In automatic mode, three AI roles play:
 
 - `Word Master`: chooses and knows the secret word, reveals prefixes, and tries to intercept player clues.
 - `Player A` and `Player B`: do not know the secret word. They only know the current prefix, redacted full public session history, used words, language, and their own personality text.
 - The observer may provide `secretWord` in `StartGameRequest`; when present, backend validation normalizes it and Word Master skips the LLM secret-word selection step.
+- `humanRole="wordMaster"` requires `secretWord`.
+- `humanRole="playerA"` must not receive the secret word in the UI before the game is finished.
 
 The frontend is observer-only. All game rules, prompts, LLM calls, state transitions, validation, and deterministic word comparison belong on the Python backend.
 
@@ -197,6 +205,7 @@ To add a prompt version:
 ## Core Game Rules
 
 - Secret word is visible only to the observer UI and Word Master.
+- In human Player A mode, client-facing game state redacts `secretWord` until the game finishes.
 - Observer-provided `secretWord` is optional. If provided, it must pass the same single-word letter validation for the selected language, then the game proceeds as if Word Master chose it.
 - Players never receive the secret word in prompts.
 - Players know current prefix, redacted full public session history, used words, language, and their own personality.
@@ -214,6 +223,15 @@ To add a prompt version:
 - There are no fallback dictionaries or hardcoded candidate words in the repository.
 - If the LLM/provider fails, show an error instead of silently substituting words.
 - `maxTurns` defaults to `50`; reaching it ends the game with Word Master winning.
+
+## Human Input Flow
+
+- `StartGameRequest.humanRole` is `"none"`, `"wordMaster"`, or `"playerA"`.
+- `GameState.pendingUserInput` is the single backend-owned pause marker for human moves.
+- Submit human input through `POST /api/game/user-input`.
+- Valid pending input kinds are `wordMasterGuess`, `playerMove`, and `partnerGuess`.
+- The frontend renders pending input inline in the timeline, but backend validation and turn transitions remain authoritative.
+- Invalid human input returns HTTP 400, leaves `pendingUserInput` in place, and does not advance the game.
 
 ## Deterministic Word Comparison
 

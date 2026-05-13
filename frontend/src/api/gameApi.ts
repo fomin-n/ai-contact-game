@@ -1,4 +1,4 @@
-import type { GameState, Language, ProviderInfo } from "../types/game";
+import type { GameState, HumanRole, Language, PendingInputKind, ProviderInfo } from "../types/game";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -6,8 +6,16 @@ export type StartGameParams = {
   language: Language;
   playerAPersonality: string;
   playerBPersonality: string;
+  humanRole?: HumanRole;
   secretWord?: string;
   maxTurns?: number;
+};
+
+export type UserInputParams = {
+  kind: PendingInputKind;
+  guess?: string;
+  intendedWord?: string;
+  clue?: string;
 };
 
 async function requestJson<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -51,4 +59,11 @@ export function startGame(params: StartGameParams): Promise<GameState> {
 
 export function resetGame(): Promise<GameState> {
   return requestJson("/api/game/reset", { method: "POST" });
+}
+
+export function submitUserInput(params: UserInputParams): Promise<GameState> {
+  return requestJson("/api/game/user-input", {
+    method: "POST",
+    body: JSON.stringify(params)
+  });
 }

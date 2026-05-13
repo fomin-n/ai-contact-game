@@ -352,6 +352,123 @@ async def _with_repair(
     raise LLMGameError(f"{task_name} failed after retries. {last_error}")
 
 
+def validate_player_move_output(
+    candidate: dict[str, Any],
+    *,
+    language: str,
+    current_prefix: str,
+    used_words: list[str],
+) -> tuple[bool, PlayerMove | None, str]:
+    used = {normalize_word(word, language) for word in used_words}
+    raw_intended_word = candidate.get("intendedWord")
+    intended_word = normalize_word(raw_intended_word, language)
+    clue = str(candidate.get("clue") or "").strip()
+    if not is_valid_word(raw_intended_word, language):
+        return (
+            False,
+            None,
+            word_validation_failure_reason(raw_intended_word, language, "intendedWord"),
+        )
+    if not starts_with_prefix(intended_word, current_prefix, language):
+        return (
+            False,
+            None,
+            (
+                f"intendedWord={intended_word!r} does not start with required currentPrefix={current_prefix!r} "
+                "after trim/lowercase normalization."
+            ),
+        )
+    if intended_word in used:
+        return (
+            False,
+            None,
+            (
+                f"intendedWord={intended_word!r} is already in usedWords/forbiddenWords. "
+                "Choose a different normal word with the same prefix."
+            ),
+        )
+    if not clue:
+        return False, None, "clue is empty or missing."
+    if clue_mentions_word(clue, intended_word, language):
+        return False, None, f"clue directly mentions intendedWord={intended_word!r}."
+    return True, PlayerMove(intendedWord=intended_word, clue=clue), ""
+
+
+def validate_master_guess_output(
+    candidate: dict[str, Any],
+    *,
+    language: str,
+    secret_word: str,
+    current_prefix: str,
+    used_words: list[str],
+) -> tuple[bool, MasterGuess, str]:
+    used = {normalize_word(word, language) for word in used_words}
+    secret = normalize_word(secret_word, language)
+    raw_guess = candidate.get("guess")
+    refused_values = {"", "null", "none", "no guess", "нет", "нет догадки"}
+    if raw_guess is None or str(raw_guess).strip().lower() in refused_values:
+        return (
+            False,
+            MasterGuess(guess="", confidence=0),
+            "guess is empty or a refusal; Word Master must choose one concrete guess.",
+        )
+    try:
+        confidence = float(candidate.get("confidence") or 0)
+    except (TypeError, ValueError):
+        return False, MasterGuess(guess="", confidence=0), "confidence must be a number from 0 to 1."
+
+    guess = normalize_word(raw_guess, language)
+    if not is_valid_word(raw_guess, language):
+        return (
+            False,
+            MasterGuess(guess="", confidence=0),
+            word_validation_failure_reason(raw_guess, language, "guess"),
+        )
+    if not starts_with_prefix(guess, current_prefix, language):
+        return (
+            False,
+            MasterGuess(guess="", confidence=0),
+            f"guess={guess!r} does not start with required currentPrefix={current_prefix!r}.",
+        )
+    if guess in used:
+        return (
+            False,
+            MasterGuess(guess="", confidence=0),
+            f"guess={guess!r} is already in usedWords/forbiddenWords.",
+        )
+    if same_word(guess, secret, language):
+        return (
+            False,
+            MasterGuess(guess="", confidence=0),
+            "guess equals the secret word; choose a different valid word.",
+        )
+    return True, MasterGuess(guess=guess, confidence=max(0, min(1, confidence))), ""
+
+
+def validate_partner_guess_output(
+    candidate: dict[str, Any],
+    *,
+    language: str,
+    current_prefix: str,
+    used_words: list[str],
+) -> tuple[bool, PartnerGuess | None, str]:
+    used = {normalize_word(word, language) for word in used_words}
+    raw_guess = candidate.get("guess")
+    guess = normalize_word(raw_guess, language)
+    if not is_valid_word(raw_guess, language):
+        return False, None, word_validation_failure_reason(raw_guess, language, "guess")
+    if not starts_with_prefix(guess, current_prefix, language):
+        return False, None, f"guess={guess!r} does not start with required currentPrefix={current_prefix!r}."
+    if guess in used:
+        return (
+            False,
+            None,
+            f"guess={guess!r} is already in usedWords/forbiddenWords. "
+            "Choose a different word with the same prefix.",
+        )
+    return True, PartnerGuess(guess=guess), ""
+
+
 async def choose_secret_word(
     *,
     provider: LLMProvider,
@@ -397,41 +514,13 @@ async def generate_player_move(
     personality: str,
     word_master_decoded_examples: list[dict[str, str]] | None = None,
 ) -> PlayerMove:
-    used = {normalize_word(word, language) for word in used_words}
-
     def validate(candidate: dict[str, Any]) -> tuple[bool, PlayerMove | None, str]:
-        raw_intended_word = candidate.get("intendedWord")
-        intended_word = normalize_word(raw_intended_word, language)
-        clue = str(candidate.get("clue") or "").strip()
-        if not is_valid_word(raw_intended_word, language):
-            return (
-                False,
-                None,
-                word_validation_failure_reason(raw_intended_word, language, "intendedWord"),
-            )
-        if not starts_with_prefix(intended_word, current_prefix, language):
-            return (
-                False,
-                None,
-                (
-                    f"intendedWord={intended_word!r} does not start with required currentPrefix={current_prefix!r} "
-                    "after trim/lowercase normalization."
-                ),
-            )
-        if intended_word in used:
-            return (
-                False,
-                None,
-                (
-                    f"intendedWord={intended_word!r} is already in usedWords/forbiddenWords. "
-                    "Choose a different normal word with the same prefix."
-                ),
-            )
-        if not clue:
-            return False, None, "clue is empty or missing."
-        if clue_mentions_word(clue, intended_word, language):
-            return False, None, f"clue directly mentions intendedWord={intended_word!r}."
-        return True, PlayerMove(intendedWord=intended_word, clue=clue), ""
+        return validate_player_move_output(
+            candidate,
+            language=language,
+            current_prefix=current_prefix,
+            used_words=used_words,
+        )
 
     return await _with_repair(
         provider=provider,
@@ -473,49 +562,14 @@ async def word_master_guess(
     public_history: list[str],
     used_words: list[str],
 ) -> MasterGuess:
-    used = {normalize_word(word, language) for word in used_words}
-    secret = normalize_word(secret_word, language)
-
     def validate(candidate: dict[str, Any]) -> tuple[bool, MasterGuess, str]:
-        raw_guess = candidate.get("guess")
-        refused_values = {"", "null", "none", "no guess", "нет", "нет догадки"}
-        if raw_guess is None or str(raw_guess).strip().lower() in refused_values:
-            return (
-                False,
-                MasterGuess(guess="", confidence=0),
-                "guess is empty or a refusal; Word Master must choose one concrete guess.",
-            )
-        try:
-            confidence = float(candidate.get("confidence") or 0)
-        except (TypeError, ValueError):
-            return False, MasterGuess(guess="", confidence=0), "confidence must be a number from 0 to 1."
-
-        guess = normalize_word(raw_guess, language)
-        if not is_valid_word(raw_guess, language):
-            return (
-                False,
-                MasterGuess(guess="", confidence=0),
-                word_validation_failure_reason(raw_guess, language, "guess"),
-            )
-        if not starts_with_prefix(guess, current_prefix, language):
-            return (
-                False,
-                MasterGuess(guess="", confidence=0),
-                f"guess={guess!r} does not start with required currentPrefix={current_prefix!r}.",
-            )
-        if guess in used:
-            return (
-                False,
-                MasterGuess(guess="", confidence=0),
-                f"guess={guess!r} is already in usedWords/forbiddenWords.",
-            )
-        if same_word(guess, secret, language):
-            return (
-                False,
-                MasterGuess(guess="", confidence=0),
-                "guess equals the secret word; choose a different valid word.",
-            )
-        return True, MasterGuess(guess=guess, confidence=max(0, min(1, confidence))), ""
+        return validate_master_guess_output(
+            candidate,
+            language=language,
+            secret_word=secret_word,
+            current_prefix=current_prefix,
+            used_words=used_words,
+        )
 
     return await _with_repair(
         provider=provider,
@@ -527,7 +581,7 @@ async def word_master_guess(
             payload={
                 "language": language,
                 "languageName": _language_name(language),
-                "secretWord": secret,
+                "secretWord": normalize_word(secret_word, language),
                 "currentPrefix": current_prefix,
                 "clue": clue,
                 "usedWords": used_words,
@@ -558,23 +612,13 @@ async def guess_partner_word(
     personality: str,
     word_master_decoded_examples: list[dict[str, str]] | None = None,
 ) -> PartnerGuess:
-    used = {normalize_word(word, language) for word in used_words}
-
     def validate(candidate: dict[str, Any]) -> tuple[bool, PartnerGuess | None, str]:
-        raw_guess = candidate.get("guess")
-        guess = normalize_word(raw_guess, language)
-        if not is_valid_word(raw_guess, language):
-            return False, None, word_validation_failure_reason(raw_guess, language, "guess")
-        if not starts_with_prefix(guess, current_prefix, language):
-            return False, None, f"guess={guess!r} does not start with required currentPrefix={current_prefix!r}."
-        if guess in used:
-            return (
-                False,
-                None,
-                f"guess={guess!r} is already in usedWords/forbiddenWords. "
-                "Choose a different word with the same prefix.",
-            )
-        return True, PartnerGuess(guess=guess), ""
+        return validate_partner_guess_output(
+            candidate,
+            language=language,
+            current_prefix=current_prefix,
+            used_words=used_words,
+        )
 
     return await _with_repair(
         provider=provider,

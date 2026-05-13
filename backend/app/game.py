@@ -5,10 +5,32 @@ import copy
 import time
 import uuid
 
-from .agents import LLMValidationError, choose_secret_word, generate_player_move, guess_partner_word, word_master_guess
+from .agents import (
+    LLMValidationError,
+    choose_secret_word,
+    generate_player_move,
+    guess_partner_word,
+    validate_master_guess_output,
+    validate_partner_guess_output,
+    validate_player_move_output,
+    word_master_guess,
+)
 from .config import AgentProviderConfig, provider_info
 from .event_log import write_event
-from .schemas import AgentModelConfig, GameMessage, GameState, PlayerRole, ProviderInfo, StartGameRequest
+from .schemas import (
+    AgentModelConfig,
+    GameMessage,
+    GameState,
+    HumanRole,
+    MasterGuess,
+    PartnerGuess,
+    PendingUserInput,
+    PlayerMove,
+    PlayerRole,
+    ProviderInfo,
+    StartGameRequest,
+    UserInputRequest,
+)
 from .word_utils import first_letters, is_valid_word, normalize_word, same_word
 
 COPY = {
@@ -44,6 +66,12 @@ COPY = {
         "secretFinal": "Secret word:",
         "turnsFinal": "Turns:",
         "winnerFinal": "Winner:",
+        "wordMasterGuessPrompt": "Word Master, guess the encoded word.",
+        "wordMasterGuessPlaceholder": "Enter your guess...",
+        "playerMovePrompt": "Player A, send an encrypted clue.",
+        "playerMovePlaceholder": "Encrypted clue",
+        "partnerGuessPrompt": "Player A, guess the word Player B encoded.",
+        "partnerGuessPlaceholder": "Enter the word you think Player B encoded...",
     },
     "ru": {
         "playerA": "Игрок A",
@@ -77,6 +105,12 @@ COPY = {
         "secretFinal": "Секретное слово:",
         "turnsFinal": "Ходов:",
         "winnerFinal": "Победитель:",
+        "wordMasterGuessPrompt": "Ведущий, угадайте зашифрованное слово.",
+        "wordMasterGuessPlaceholder": "Введите догадку...",
+        "playerMovePrompt": "Игрок A, отправьте зашифрованную подсказку.",
+        "playerMovePlaceholder": "Зашифрованная подсказка",
+        "partnerGuessPrompt": "Игрок A, угадайте слово, которое зашифровал Игрок B.",
+        "partnerGuessPlaceholder": "Введите слово, которое, по вашему мнению, зашифровал Игрок B...",
     },
 }
 
@@ -101,6 +135,8 @@ class GameManager:
         self._lock = asyncio.Lock()
         self._run_id = 0
         self._task: asyncio.Task | None = None
+        self._pending_event: asyncio.Event | None = None
+        self._pending_submission: MasterGuess | PlayerMove | PartnerGuess | None = None
         self._state = self._idle_state(
             language="en",
             player_a_personality="Playful, metaphor-loving, a little theatrical, but concise.",
@@ -112,11 +148,15 @@ class GameManager:
 
     async def get_state(self) -> GameState:
         async with self._lock:
-            return copy.deepcopy(self._state)
+            return self._client_state(self._state)
 
     async def start(self, request: StartGameRequest) -> GameState:
         await self._cancel_task()
         provided_secret = self._provided_secret_word(request)
+        if request.humanRole == "wordMaster" and not provided_secret:
+            raise ValueError("Secret word is required when playing as Word Master.")
+        if request.humanRole == "playerA" and provided_secret:
+            raise ValueError("Secret word cannot be provided when playing as Player A.")
         async with self._lock:
             self._run_id += 1
             run_id = self._run_id
@@ -125,20 +165,23 @@ class GameManager:
                 player_a_personality=request.playerAPersonality,
                 player_b_personality=request.playerBPersonality,
                 max_turns=request.maxTurns,
+                human_role=request.humanRole,
             )
             self._state.status = "running"
             if provided_secret:
                 self._state.secretWord = provided_secret
                 self._state.currentPrefix = first_letters(provided_secret, 1)
                 self._state.revealedLength = 1
-            state = copy.deepcopy(self._state)
+            state = self._client_state(self._state)
         write_event(
             "game_start",
             runId=run_id,
             request=request,
             state=state,
             providerInfo=self.provider_info,
+            humanRole=request.humanRole,
         )
+        write_event("human_role_selected", runId=run_id, humanRole=request.humanRole)
         self._task = asyncio.create_task(self._run_loop(run_id))
         return state
 
@@ -152,6 +195,7 @@ class GameManager:
                 player_a_personality=previous.playerAPersonality,
                 player_b_personality=previous.playerBPersonality,
                 max_turns=previous.maxTurns,
+                human_role=previous.humanRole,
             )
             write_event(
                 "game_reset",
@@ -159,17 +203,61 @@ class GameManager:
                 previousState=previous,
                 state=self._state,
             )
-            return copy.deepcopy(self._state)
+            return self._client_state(self._state)
+
+    async def submit_user_input(self, request: UserInputRequest) -> GameState:
+        event: asyncio.Event | None = None
+        async with self._lock:
+            if self._state.status != "running" or not self._state.pendingUserInput:
+                raise ValueError("The game is not waiting for user input.")
+            pending = self._state.pendingUserInput
+            if request.kind != pending.kind:
+                raise ValueError(f"The game is waiting for {pending.kind}, not {request.kind}.")
+
+            try:
+                submission = self._validate_user_input(self._state, request)
+            except ValueError as error:
+                write_event(
+                    "human_input_validation_failure",
+                    runId=self._run_id,
+                    humanRole=self._state.humanRole,
+                    pendingUserInput=pending,
+                    request=request,
+                    error=error,
+                    state=self._state,
+                )
+                raise
+
+            self._pending_submission = submission
+            self._state.pendingUserInput = None
+            event = self._pending_event
+            write_event(
+                "human_input_submitted",
+                runId=self._run_id,
+                humanRole=self._state.humanRole,
+                inputKind=request.kind,
+                submission=submission,
+                state=self._state,
+            )
+            state = self._client_state(self._state)
+
+        if event:
+            event.set()
+        return state
 
     async def _cancel_task(self) -> None:
         task = self._task
         self._task = None
+        if self._pending_event:
+            self._pending_event.set()
         if task and not task.done():
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
+        self._pending_event = None
+        self._pending_submission = None
 
     def _idle_state(
         self,
@@ -178,14 +266,35 @@ class GameManager:
         player_a_personality: str,
         player_b_personality: str,
         max_turns: int = 50,
+        human_role: HumanRole = "none",
     ) -> GameState:
         return GameState(
             language=language,
+            humanRole=human_role,
             maxTurns=max_turns,
             playerAPersonality=player_a_personality,
             playerBPersonality=player_b_personality,
             providerInfo=self.provider_info,
         )
+
+    def _client_state(self, state: GameState) -> GameState:
+        visible_state = copy.deepcopy(state)
+        if visible_state.humanRole == "playerA" and visible_state.status != "finished":
+            secret = visible_state.secretWord
+            secret_placeholder = "[secret]" if visible_state.language == "en" else "[секрет]"
+            labels = COPY[visible_state.language]
+            if secret:
+                for message in visible_state.messages:
+                    event_type = (message.metadata or {}).get("eventType")
+                    if event_type == "secret-chosen":
+                        message.text = labels["wordMasterChose"]
+                    else:
+                        message.text = message.text.replace(secret, secret_placeholder)
+                    if message.metadata and message.metadata.get("word") == secret:
+                        message.metadata = {**message.metadata}
+                        message.metadata.pop("word", None)
+            visible_state.secretWord = ""
+        return visible_state
 
     def _provided_secret_word(self, request: StartGameRequest) -> str:
         raw_word = (request.secretWord or "").strip()
@@ -195,6 +304,35 @@ class GameManager:
         if not is_valid_word(word, request.language):
             raise ValueError(COPY[request.language]["invalidCustomSecret"])
         return word
+
+    def _validate_user_input(self, state: GameState, request: UserInputRequest) -> MasterGuess | PlayerMove | PartnerGuess:
+        if request.kind == "wordMasterGuess":
+            ok, value, reason = validate_master_guess_output(
+                {"guess": request.guess, "confidence": 1},
+                language=state.language,
+                secret_word=state.secretWord,
+                current_prefix=state.currentPrefix,
+                used_words=state.usedWords,
+            )
+        elif request.kind == "playerMove":
+            ok, value, reason = validate_player_move_output(
+                {"intendedWord": request.intendedWord, "clue": request.clue},
+                language=state.language,
+                current_prefix=state.currentPrefix,
+                used_words=state.usedWords,
+            )
+        elif request.kind == "partnerGuess":
+            ok, value, reason = validate_partner_guess_output(
+                {"guess": request.guess},
+                language=state.language,
+                current_prefix=state.currentPrefix,
+                used_words=state.usedWords,
+            )
+        else:
+            raise ValueError(f"Unsupported user input kind: {request.kind}.")
+        if not ok or value is None:
+            raise ValueError(reason or "Submitted input does not satisfy the game rules.")
+        return value
 
     async def _is_active(self, run_id: int) -> bool:
         async with self._lock:
@@ -235,6 +373,46 @@ class GameManager:
             )
 
         return await self._mutate(run_id, append)
+
+    async def _await_user_input(
+        self,
+        run_id: int,
+        pending_input: PendingUserInput,
+    ) -> MasterGuess | PlayerMove | PartnerGuess | None:
+        event = asyncio.Event()
+        async with self._lock:
+            if self._run_id != run_id or self._state.status != "running":
+                return None
+            if self._state.pendingUserInput is not None:
+                raise RuntimeError("A user input request is already pending.")
+            self._pending_event = event
+            self._pending_submission = None
+            self._state.pendingUserInput = pending_input
+            write_event(
+                "pending_user_input_created",
+                runId=run_id,
+                humanRole=self._state.humanRole,
+                pendingUserInput=pending_input,
+                state=self._state,
+            )
+
+        await event.wait()
+
+        async with self._lock:
+            if self._run_id != run_id or self._state.status != "running":
+                return None
+            submission = self._pending_submission
+            self._pending_submission = None
+            self._pending_event = None
+            write_event(
+                "game_resumed_after_human_input",
+                runId=run_id,
+                humanRole=self._state.humanRole,
+                inputKind=pending_input.kind,
+                submission=submission,
+                state=self._state,
+            )
+            return submission
 
     def _agent_history(self, state: GameState, *, include_secret: bool) -> list[str]:
         labels = COPY[state.language]
@@ -466,18 +644,37 @@ class GameManager:
             state=state,
         )
 
-        move = await generate_player_move(
-            provider=actor_provider,
-            models=self.models,
-            player_name=actor_name,
-            player_role=actor,
-            language=state.language,
-            current_prefix=state.currentPrefix,
-            public_history=self._agent_history(state, include_secret=False),
-            used_words=state.usedWords,
-            personality=actor_personality,
-            word_master_decoded_examples=self._word_master_decoded_examples(state),
-        )
+        if state.humanRole == "playerA" and actor == "playerA":
+            move_result = await self._await_user_input(
+                run_id,
+                PendingUserInput(
+                    kind="playerMove",
+                    role="playerA",
+                    promptText=labels["playerMovePrompt"],
+                    placeholderText=labels["playerMovePlaceholder"],
+                    currentPrefix=state.currentPrefix,
+                    actingPlayer=actor,
+                    partner=partner,
+                ),
+            )
+            if move_result is None:
+                return
+            if not isinstance(move_result, PlayerMove):
+                raise RuntimeError("Expected a PlayerMove submission.")
+            move = move_result
+        else:
+            move = await generate_player_move(
+                provider=actor_provider,
+                models=self.models,
+                player_name=actor_name,
+                player_role=actor,
+                language=state.language,
+                current_prefix=state.currentPrefix,
+                public_history=self._agent_history(state, include_secret=False),
+                used_words=state.usedWords,
+                personality=actor_personality,
+                word_master_decoded_examples=self._word_master_decoded_examples(state),
+            )
         intended_word = normalize_word(move.intendedWord, state.language)
         clue = move.clue.strip()
         write_event(
@@ -492,16 +689,36 @@ class GameManager:
             return
 
         state = await self._snapshot()
-        master_guess = await word_master_guess(
-            provider=self.providers.word_master_provider,
-            models=self.models,
-            language=state.language,
-            secret_word=state.secretWord,
-            current_prefix=state.currentPrefix,
-            clue=clue,
-            public_history=self._agent_history(state, include_secret=True),
-            used_words=state.usedWords,
-        )
+        if state.humanRole == "wordMaster":
+            master_guess_result = await self._await_user_input(
+                run_id,
+                PendingUserInput(
+                    kind="wordMasterGuess",
+                    role="wordMaster",
+                    promptText=labels["wordMasterGuessPrompt"],
+                    placeholderText=labels["wordMasterGuessPlaceholder"],
+                    currentPrefix=state.currentPrefix,
+                    clue=clue,
+                    actingPlayer=actor,
+                    partner=partner,
+                ),
+            )
+            if master_guess_result is None:
+                return
+            if not isinstance(master_guess_result, MasterGuess):
+                raise RuntimeError("Expected a Word Master guess submission.")
+            master_guess = master_guess_result
+        else:
+            master_guess = await word_master_guess(
+                provider=self.providers.word_master_provider,
+                models=self.models,
+                language=state.language,
+                secret_word=state.secretWord,
+                current_prefix=state.currentPrefix,
+                clue=clue,
+                public_history=self._agent_history(state, include_secret=True),
+                used_words=state.usedWords,
+            )
         master_guess_word = normalize_word(master_guess.guess, state.language)
         write_event(
             "word_master_guess_generated",
@@ -548,19 +765,39 @@ class GameManager:
             return
 
         state = await self._snapshot()
-        partner_answer = await guess_partner_word(
-            provider=partner_provider,
-            models=self.models,
-            player_name=partner_name,
-            player_role=partner,
-            language=state.language,
-            current_prefix=state.currentPrefix,
-            clue=clue,
-            public_history=self._agent_history(state, include_secret=False),
-            used_words=state.usedWords,
-            personality=partner_personality,
-            word_master_decoded_examples=self._word_master_decoded_examples(state),
-        )
+        if state.humanRole == "playerA" and partner == "playerA":
+            partner_guess_result = await self._await_user_input(
+                run_id,
+                PendingUserInput(
+                    kind="partnerGuess",
+                    role="playerA",
+                    promptText=labels["partnerGuessPrompt"],
+                    placeholderText=labels["partnerGuessPlaceholder"],
+                    currentPrefix=state.currentPrefix,
+                    clue=clue,
+                    actingPlayer=actor,
+                    partner=partner,
+                ),
+            )
+            if partner_guess_result is None:
+                return
+            if not isinstance(partner_guess_result, PartnerGuess):
+                raise RuntimeError("Expected a Player A partner guess submission.")
+            partner_answer = partner_guess_result
+        else:
+            partner_answer = await guess_partner_word(
+                provider=partner_provider,
+                models=self.models,
+                player_name=partner_name,
+                player_role=partner,
+                language=state.language,
+                current_prefix=state.currentPrefix,
+                clue=clue,
+                public_history=self._agent_history(state, include_secret=False),
+                used_words=state.usedWords,
+                personality=partner_personality,
+                word_master_decoded_examples=self._word_master_decoded_examples(state),
+            )
         guessed_word = normalize_word(partner_answer.guess, state.language)
         write_event(
             "partner_guess_generated",

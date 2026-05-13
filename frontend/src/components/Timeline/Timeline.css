@@ -99,6 +99,37 @@
   overflow-wrap: anywhere;
 }
 
+.pending-input {
+  border-style: dashed;
+}
+
+.pending-input-form {
+  display: grid;
+  gap: 10px;
+}
+
+.pending-input-form input,
+.pending-input-form textarea {
+  width: 100%;
+}
+
+.pending-input-field {
+  display: grid;
+  gap: 6px;
+}
+
+.pending-input-field span {
+  color: #4e5752;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.pending-input-error {
+  color: #a8322a;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .message-word {
   font-weight: 900;
 }

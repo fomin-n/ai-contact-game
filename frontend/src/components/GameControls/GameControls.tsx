@@ -1,5 +1,5 @@
 import type { UiCopy } from "../../i18n/copy";
-import type { Language } from "../../types/game";
+import type { HumanRole, Language } from "../../types/game";
 
 type GameControlsProps = {
   labels: UiCopy;
@@ -7,9 +7,12 @@ type GameControlsProps = {
   playerAPersonality: string;
   playerBPersonality: string;
   customSecretWord: string;
+  humanRole: HumanRole;
   isDisabled: boolean;
+  isStartDisabled: boolean;
   isResetDisabled: boolean;
   onLanguageChange: (language: Language) => void;
+  onHumanRoleChange: (role: HumanRole) => void;
   onPlayerAPersonalityChange: (value: string) => void;
   onPlayerBPersonalityChange: (value: string) => void;
   onCustomSecretWordChange: (value: string) => void;
@@ -23,9 +26,12 @@ export function GameControls({
   playerAPersonality,
   playerBPersonality,
   customSecretWord,
+  humanRole,
   isDisabled,
+  isStartDisabled,
   isResetDisabled,
   onLanguageChange,
+  onHumanRoleChange,
   onPlayerAPersonalityChange,
   onPlayerBPersonalityChange,
   onCustomSecretWordChange,
@@ -47,15 +53,35 @@ export function GameControls({
       </label>
 
       <label className="field">
+        <span>{labels.gameMode}</span>
+        <select
+          value={humanRole}
+          onChange={(event) => onHumanRoleChange(event.target.value as HumanRole)}
+          disabled={isDisabled}
+        >
+          <option value="none">{labels.modeNone}</option>
+          <option value="wordMaster">{labels.modeWordMaster}</option>
+          <option value="playerA">{labels.modePlayerA}</option>
+        </select>
+      </label>
+
+      <label className="field">
         <span>{labels.optionalSecretWord}</span>
         <input
           value={customSecretWord}
           onChange={(event) => onCustomSecretWordChange(event.target.value)}
-          disabled={isDisabled}
+          disabled={isDisabled || humanRole === "playerA"}
           placeholder={labels.optionalSecretWordPlaceholder}
           autoComplete="off"
+          required={humanRole === "wordMaster"}
         />
-        <small>{labels.optionalSecretWordHint}</small>
+        <small>
+          {humanRole === "wordMaster"
+            ? labels.requiredSecretWordHint
+            : humanRole === "playerA"
+              ? labels.hiddenSecretWordHint
+              : labels.optionalSecretWordHint}
+        </small>
       </label>
 
       <label className="field">
@@ -79,7 +105,7 @@ export function GameControls({
       </label>
 
       <div className="button-row">
-        <button className="primary" type="button" onClick={onStart} disabled={isDisabled}>
+        <button className="primary" type="button" onClick={onStart} disabled={isStartDisabled}>
           {labels.start}
         </button>
         <button type="button" onClick={onReset} disabled={isResetDisabled}>

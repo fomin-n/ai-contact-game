@@ -6,6 +6,10 @@ export type PlayerRole = "playerA" | "playerB";
 
 export type GameStatus = "idle" | "running" | "finished";
 
+export type HumanRole = "none" | "wordMaster" | "playerA";
+
+export type PendingInputKind = "wordMasterGuess" | "playerMove" | "partnerGuess";
+
 export type AgentModelInfo = {
   wordMasterModel: string;
   playerAModel: string;
@@ -44,14 +48,27 @@ export type GameMessage = {
   };
 };
 
+export type PendingUserInput = {
+  kind: PendingInputKind;
+  role: "wordMaster" | "playerA";
+  promptText: string;
+  placeholderText: string;
+  currentPrefix: string;
+  clue?: string | null;
+  actingPlayer?: PlayerRole | null;
+  partner?: PlayerRole | null;
+};
+
 export type GameState = {
   status: GameStatus;
   language: Language;
+  humanRole: HumanRole;
   secretWord: string;
   currentPrefix: string;
   revealedLength: number;
   usedWords: string[];
   messages: GameMessage[];
+  pendingUserInput?: PendingUserInput | null;
   currentTurn: PlayerRole;
   turnNumber: number;
   maxTurns: number;

@@ -9,6 +9,8 @@ Language = Literal["en", "ru"]
 Role = Literal["system", "playerA", "playerB", "wordMaster"]
 PlayerRole = Literal["playerA", "playerB"]
 GameStatus = Literal["idle", "running", "finished"]
+HumanRole = Literal["none", "wordMaster", "playerA"]
+PendingInputKind = Literal["wordMasterGuess", "playerMove", "partnerGuess"]
 
 
 @dataclass(frozen=True)
@@ -52,14 +54,27 @@ class GameMessage(BaseModel):
     metadata: dict | None = None
 
 
+class PendingUserInput(BaseModel):
+    kind: PendingInputKind
+    role: Literal["wordMaster", "playerA"]
+    promptText: str
+    placeholderText: str
+    currentPrefix: str
+    clue: str | None = None
+    actingPlayer: PlayerRole | None = None
+    partner: PlayerRole | None = None
+
+
 class GameState(BaseModel):
     status: GameStatus = "idle"
     language: Language = "en"
+    humanRole: HumanRole = "none"
     secretWord: str = ""
     currentPrefix: str = ""
     revealedLength: int = 0
     usedWords: list[str] = Field(default_factory=list)
     messages: list[GameMessage] = Field(default_factory=list)
+    pendingUserInput: PendingUserInput | None = None
     currentTurn: PlayerRole = "playerA"
     turnNumber: int = 1
     maxTurns: int = 50
@@ -74,8 +89,16 @@ class StartGameRequest(BaseModel):
     language: Language
     playerAPersonality: str
     playerBPersonality: str
+    humanRole: HumanRole = "none"
     secretWord: str | None = None
     maxTurns: int = Field(default=50, ge=1, le=200)
+
+
+class UserInputRequest(BaseModel):
+    kind: PendingInputKind
+    guess: str | None = None
+    intendedWord: str | None = None
+    clue: str | None = None
 
 
 class ConfigResponse(BaseModel):

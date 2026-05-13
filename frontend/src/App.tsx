@@ -16,9 +16,13 @@ function App() {
     activeProviderInfo,
     customSecretWord,
     game,
+    handleHumanRoleChange,
     handleLanguageChange,
+    humanRole,
     isRequesting,
     isRunning,
+    isStartDisabled,
+    isSubmittingUserInput,
     language,
     playerAPersonality,
     playerBPersonality,
@@ -27,6 +31,8 @@ function App() {
     setPlayerAPersonality,
     setPlayerBPersonality,
     startGame,
+    submitUserInput,
+    userInputError,
     uiError
   } = useGameController();
   const visibleLabels = copy[game.language];
@@ -56,9 +62,12 @@ function App() {
             playerAPersonality={playerAPersonality}
             playerBPersonality={playerBPersonality}
             customSecretWord={customSecretWord}
+            humanRole={humanRole}
             isDisabled={isRunning || isRequesting}
+            isStartDisabled={isStartDisabled}
             isResetDisabled={isRequesting}
             onLanguageChange={handleLanguageChange}
+            onHumanRoleChange={handleHumanRoleChange}
             onPlayerAPersonalityChange={setPlayerAPersonality}
             onPlayerBPersonalityChange={setPlayerBPersonality}
             onCustomSecretWordChange={setCustomSecretWord}
@@ -82,7 +91,15 @@ function App() {
             currentPrefix={game.currentPrefix}
             turnNumber={game.turnNumber}
           />
-          <Timeline labels={visibleLabels} language={game.language} messages={game.messages} />
+          <Timeline
+            labels={visibleLabels}
+            language={game.language}
+            messages={game.messages}
+            pendingUserInput={game.pendingUserInput}
+            isSubmittingUserInput={isSubmittingUserInput}
+            userInputError={userInputError}
+            onSubmitUserInput={submitUserInput}
+          />
         </section>
       </section>
     </main>
