@@ -5,6 +5,131 @@ import "./AgentModelSettings.css";
 
 type ModelRole = keyof AgentModelSelection;
 
+const roleOrder: ModelRole[] = ["wordMaster", "playerA", "playerB"];
+
+function roleLabel(labels: UiCopy, role: ModelRole): string {
+  return role === "wordMaster" ? labels.wordMaster : role === "playerA" ? labels.playerA : labels.playerB;
+}
+
+function providerFor(catalog: ProviderModelCatalog[], providerId: string): ProviderModelCatalog | undefined {
+  return catalog.find((p) => p.id === providerId);
+}
+
+function firstModel(provider: ProviderModelCatalog | undefined): string {
+  return provider?.defaultModel || provider?.models[0]?.id || "";
+}
+
+function modelDisplayName(catalog: ProviderModelCatalog[], providerId: string, modelId: string): string {
+  return providerFor(catalog, providerId)?.models.find((m) => m.id === modelId)?.displayName ?? modelId;
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+type ToggleSwitchProps = {
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+};
+
+function ToggleSwitch({ checked, disabled, onChange, label }: ToggleSwitchProps) {
+  return (
+    <label className={`toggle-row${disabled ? " toggle-row-disabled" : ""}`}>
+      <span className="toggle-switch">
+        <input
+          type="checkbox"
+          role="switch"
+          checked={checked}
+          disabled={disabled}
+          aria-label={label}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="toggle-track" aria-hidden="true" />
+      </span>
+      <span>{label}</span>
+    </label>
+  );
+}
+
+type StatusDotProps = {
+  ok: boolean;
+  labels: UiCopy;
+};
+
+function StatusDot({ ok, labels }: StatusDotProps) {
+  return (
+    <span className={`status-dot ${ok ? "status-ready" : "status-incomplete"}`}>
+      <span className="status-circle" aria-hidden="true" />
+      {ok ? labels.statusReady : labels.statusIncomplete}
+    </span>
+  );
+}
+
+type SelectPairProps = {
+  providerId: string;
+  modelId: string;
+  catalog: ProviderModelCatalog[];
+  disabled: boolean;
+  providerLabel: string;
+  modelLabel: string;
+  providerAriaLabel?: string;
+  modelAriaLabel?: string;
+  onProviderChange: (id: string) => void;
+  onModelChange: (id: string) => void;
+};
+
+function SelectPair({
+  providerId,
+  modelId,
+  catalog,
+  disabled,
+  providerLabel,
+  modelLabel,
+  providerAriaLabel,
+  modelAriaLabel,
+  onProviderChange,
+  onModelChange,
+}: SelectPairProps) {
+  const provider = providerFor(catalog, providerId) ?? catalog[0];
+  return (
+    <>
+      <label className="select-field">
+        <span>{providerLabel}</span>
+        <select
+          value={providerId}
+          disabled={disabled}
+          aria-label={providerAriaLabel}
+          onChange={(e) => onProviderChange(e.target.value)}
+        >
+          {catalog.map((p) => (
+            <option value={p.id} disabled={!p.hasApiKey} key={p.id}>
+              {p.displayName}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="select-field">
+        <span>{modelLabel}</span>
+        <select
+          value={modelId}
+          disabled={disabled || !provider}
+          aria-label={modelAriaLabel}
+          onChange={(e) => onModelChange(e.target.value)}
+        >
+          {(provider?.models ?? []).map((m) => (
+            <option value={m.id} key={m.id}>
+              {m.displayName}
+              {m.isCustom ? " (custom)" : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 type AgentModelSettingsProps = {
   labels: UiCopy;
   catalog: ProviderModelCatalog[];
@@ -15,22 +140,6 @@ type AgentModelSettingsProps = {
   onSelectionChange: (selection: AgentModelSelection) => void;
 };
 
-const roleOrder: ModelRole[] = ["wordMaster", "playerA", "playerB"];
-
-function roleLabel(labels: UiCopy, role: ModelRole): string {
-  if (role === "wordMaster") return labels.wordMasterModel;
-  if (role === "playerA") return labels.playerAModel;
-  return labels.playerBModel;
-}
-
-function providerFor(catalog: ProviderModelCatalog[], providerId: string): ProviderModelCatalog | undefined {
-  return catalog.find((provider) => provider.id === providerId);
-}
-
-function firstModel(provider: ProviderModelCatalog | undefined): string {
-  return provider?.defaultModel || provider?.models[0]?.id || "";
-}
-
 export function AgentModelSettings({
   labels,
   catalog,
@@ -38,99 +147,108 @@ export function AgentModelSettings({
   mode,
   disabled,
   onModeChange,
-  onSelectionChange
+  onSelectionChange,
 }: AgentModelSettingsProps) {
-  function updateRole(role: ModelRole, nextRoleSelection: RoleModelSelection) {
-    onSelectionChange({
-      ...selection,
-      [role]: nextRoleSelection
-    });
+  function updateRole(role: ModelRole, next: RoleModelSelection) {
+    onSelectionChange({ ...selection, [role]: next });
   }
 
-  function updateProvider(role: ModelRole, providerId: string) {
+  function handleProviderChange(role: ModelRole, providerId: string) {
     const provider = providerFor(catalog, providerId);
-    updateRole(role, {
-      provider: providerId,
-      model: firstModel(provider)
-    });
+    updateRole(role, { provider: providerId, model: firstModel(provider) });
   }
 
-  function updateModel(role: ModelRole, model: string) {
-    updateRole(role, {
-      ...selection[role],
-      model
-    });
+  function handleModelChange(role: ModelRole, modelId: string) {
+    updateRole(role, { ...selection[role], model: modelId });
   }
 
-  const rows = mode === "same" ? (["wordMaster"] as ModelRole[]) : roleOrder;
+  const sharedProvider = providerFor(catalog, selection.wordMaster.provider) ?? catalog[0];
+  const sharedModelName = modelDisplayName(catalog, selection.wordMaster.provider, selection.wordMaster.model);
 
   return (
-    <section className="panel agent-model-settings" aria-label={labels.aiModels}>
-      <header>
+    <section className="panel ai-models-panel" aria-label={labels.aiModels}>
+      <header className="ai-models-header">
         <h2>{labels.aiModels}</h2>
+        {!!catalog.length && (
+          <ToggleSwitch
+            checked={mode === "same"}
+            disabled={disabled}
+            onChange={(checked) => onModeChange(checked ? "same" : "advanced")}
+            label={labels.useSameModel}
+          />
+        )}
       </header>
 
       {!catalog.length && <p className="muted">...</p>}
 
-      {!!catalog.length && <label className="model-same-toggle">
-        <input
-          type="checkbox"
-          checked={mode === "same"}
-          disabled={disabled}
-          onChange={(event) => onModeChange(event.target.checked ? "same" : "advanced")}
-        />
-        <span>{labels.useSameModel}</span>
-      </label>}
+      {!!catalog.length && mode === "same" && (
+        <div className="shared-selector">
+          <div className="shared-selects">
+            <SelectPair
+              providerId={selection.wordMaster.provider}
+              modelId={selection.wordMaster.model}
+              catalog={catalog}
+              disabled={disabled}
+              providerLabel={labels.provider}
+              modelLabel={labels.model}
+              onProviderChange={(id) => handleProviderChange("wordMaster", id)}
+              onModelChange={(id) => handleModelChange("wordMaster", id)}
+            />
+          </div>
+          <div className="shared-meta">
+            <StatusDot ok={!!sharedProvider?.hasApiKey} labels={labels} />
+            <span className="shared-meta-text">
+              {labels.currentSetup} {sharedModelName} {labels.forAllRoles}
+            </span>
+          </div>
+          <p className="applied-to">
+            {labels.appliedTo} {labels.wordMaster}, {labels.playerA}, {labels.playerB}
+          </p>
+        </div>
+      )}
 
-      {!!catalog.length && <div className="agent-model-rows">
-        {rows.map((role) => {
-          const roleSelection = selection[role];
-          const provider = providerFor(catalog, roleSelection.provider) ?? catalog[0];
-          return (
-            <div className="agent-model-row" key={role}>
-              <div className="agent-model-row-header">
-                <strong>{mode === "same" ? labels.allRolesModel : roleLabel(labels, role)}</strong>
-                {provider && (
-                  <span className={provider.hasApiKey ? "key-status configured" : "key-status missing"}>
-                    {provider.hasApiKey ? labels.providerConfigured : labels.providerMissingKey}
-                  </span>
-                )}
-              </div>
-
-              <label>
-                <span>{labels.provider}</span>
-                <select
-                  value={roleSelection.provider}
-                  disabled={disabled}
-                  onChange={(event) => updateProvider(role, event.target.value)}
-                >
-                  {catalog.map((providerOption) => (
-                    <option value={providerOption.id} disabled={!providerOption.hasApiKey} key={providerOption.id}>
-                      {providerOption.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label>
-                <span>{labels.model}</span>
-                <select
-                  value={roleSelection.model}
-                  disabled={disabled || !provider}
-                  onChange={(event) => updateModel(role, event.target.value)}
-                >
-                  {(provider?.models ?? []).map((model) => (
-                    <option value={model.id} key={model.id}>
-                      {model.displayName}
-                      {model.isCustom ? " (custom)" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          );
-        })}
-      </div>}
+      {!!catalog.length && mode === "advanced" && (
+        <>
+          <div className="role-rows">
+            {roleOrder.map((role) => {
+              const rs = selection[role];
+              const provider = providerFor(catalog, rs.provider) ?? catalog[0];
+              const roleName = roleLabel(labels, role);
+              return (
+                <div className="role-row" key={role}>
+                  <div className="role-row-header">
+                    <span className="role-row-name">{roleName}</span>
+                    <StatusDot ok={!!provider?.hasApiKey} labels={labels} />
+                  </div>
+                  <div className="role-row-selects">
+                    <SelectPair
+                      providerId={rs.provider}
+                      modelId={rs.model}
+                      catalog={catalog}
+                      disabled={disabled}
+                      providerLabel={labels.provider}
+                      modelLabel={labels.model}
+                      providerAriaLabel={`${roleName} — ${labels.provider}`}
+                      modelAriaLabel={`${roleName} — ${labels.model}`}
+                      onProviderChange={(id) => handleProviderChange(role, id)}
+                      onModelChange={(id) => handleModelChange(role, id)}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="role-summary">
+            {roleOrder.map((role, i) => (
+              <span key={role}>
+                {i > 0 && <span className="summary-sep"> · </span>}
+                <strong>{roleLabel(labels, role)}:</strong>{" "}
+                {modelDisplayName(catalog, selection[role].provider, selection[role].model)}
+              </span>
+            ))}
+          </p>
+        </>
+      )}
     </section>
   );
 }

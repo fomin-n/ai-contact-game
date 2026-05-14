@@ -1,81 +1,235 @@
-.agent-model-settings {
+/* ── Panel layout ────────────────────────────────────── */
+
+.ai-models-panel {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   padding: 14px;
 }
 
-.agent-model-settings header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* ── Header ──────────────────────────────────────────── */
+
+.ai-models-header {
+  display: grid;
+  gap: 8px;
 }
 
-.model-same-toggle {
+/* ── Toggle switch ───────────────────────────────────── */
+
+.toggle-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
+  cursor: pointer;
+  user-select: none;
   color: #4e5752;
-  font-size: 0.86rem;
-  font-weight: 800;
+  font-size: 0.84rem;
+  font-weight: 700;
+  width: fit-content;
 }
 
-.model-same-toggle input {
-  width: auto;
-  min-height: auto;
+.toggle-row-disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
 }
 
-.agent-model-rows {
-  display: grid;
-  gap: 10px;
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 34px;
+  height: 19px;
 }
 
-.agent-model-row {
+.toggle-switch > input[type="checkbox"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.toggle-switch > input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #c4bfb5;
+  transition: background 160ms ease;
+  pointer-events: none;
+}
+
+.toggle-track::before {
+  content: "";
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  left: 3px;
+  top: 3px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  transition: transform 160ms ease;
+}
+
+.toggle-switch > input[type="checkbox"]:checked + .toggle-track {
+  background: #235a50;
+}
+
+.toggle-switch > input[type="checkbox"]:checked + .toggle-track::before {
+  transform: translateX(15px);
+}
+
+.toggle-switch > input[type="checkbox"]:focus-visible + .toggle-track {
+  outline: 3px solid rgba(35, 90, 80, 0.24);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+/* ── Shared selector (same mode) ─────────────────────── */
+
+.shared-selector {
   display: grid;
   gap: 8px;
-  border: 1px solid #e3ddcf;
-  border-radius: 8px;
-  background: #fffdf8;
-  padding: 10px;
 }
 
-.agent-model-row-header {
+.shared-selects {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.select-field {
+  display: grid;
+  gap: 4px;
+}
+
+.select-field > span {
+  color: #63706a;
+  font-size: 0.73rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.select-field select {
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 0.84rem;
+  border-radius: 6px;
+}
+
+.shared-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 7px;
 }
 
-.agent-model-row-header strong {
-  color: #17201b;
-  font-size: 0.88rem;
+.shared-meta-text {
+  color: #4e5752;
+  font-size: 0.82rem;
 }
 
-.key-status {
-  border-radius: 999px;
-  padding: 3px 7px;
-  font-size: 0.72rem;
-  font-weight: 900;
-  text-transform: uppercase;
+.applied-to {
+  margin: 0;
+  color: #718077;
+  font-size: 0.78rem;
 }
 
-.key-status.configured {
-  background: #edf7f2;
+/* ── Status dot ──────────────────────────────────────── */
+
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-circle {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-ready {
   color: #235a50;
 }
 
-.key-status.missing {
-  background: #fff3f1;
-  color: #a8322a;
+.status-ready .status-circle {
+  background: #4caf87;
 }
 
-.agent-model-row label {
+.status-incomplete {
+  color: #8a5a18;
+}
+
+.status-incomplete .status-circle {
+  background: #d9a244;
+}
+
+/* ── Advanced mode role rows ─────────────────────────── */
+
+.role-rows {
   display: grid;
-  gap: 5px;
 }
 
-.agent-model-row label span {
+.role-row {
+  display: grid;
+  gap: 7px;
+  padding: 9px 0;
+  border-top: 1px solid #ede8df;
+}
+
+.role-row:first-child {
+  border-top: none;
+  padding-top: 2px;
+}
+
+.role-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.role-row-name {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: #17201b;
+}
+
+.role-row-selects {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ── Role summary line ───────────────────────────────── */
+
+.role-summary {
+  margin: 0;
+  font-size: 0.77rem;
   color: #63706a;
-  font-size: 0.74rem;
-  font-weight: 900;
-  text-transform: uppercase;
+  line-height: 1.55;
+  border-top: 1px solid #ede8df;
+  padding-top: 8px;
+}
+
+.role-summary strong {
+  color: #3d4d46;
+  font-weight: 700;
+}
+
+.summary-sep {
+  color: #b0b8b2;
 }
