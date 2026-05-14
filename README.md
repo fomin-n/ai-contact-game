@@ -16,6 +16,10 @@ In the original game, a Word Master thinks of a word and reveals its first lette
 
 This project adapts that structure for LLM agents and optional human roles. The backend pauses the game when a human move is needed, validates the submitted word or clue, then resumes the same turn flow.
 
+## Demo
+
+![AI vs AI gameplay](docs/aivsai.gif)
+
 ## LLM Interaction Schema
 
 ![LLM interaction schema](docs/schema.png)
