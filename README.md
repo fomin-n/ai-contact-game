@@ -16,6 +16,10 @@ In the original game, a Word Master thinks of a word and reveals its first lette
 
 This project adapts that structure for LLM agents and optional human roles. The backend pauses the game when a human move is needed, validates the submitted word or clue, then resumes the same turn flow.
 
+## LLM Interaction Schema
+
+![LLM interaction schema](docs/schema.png)
+
 ## Repository
 
 GitHub: [fomin-n/ai-contact-game](https://github.com/fomin-n/ai-contact-game)
@@ -64,11 +68,9 @@ To install dependencies without starting servers:
 ## Choosing AI Models
 
 Set provider API keys in `.env`, start the app, then use **Settings → AI Models**.
-Simple mode uses one provider/model for all AI roles. Advanced mode lets you choose
-separate models for Word Master, Player A, and Player B.
+Each AI role (Word Master, Player A, Player B) can be assigned its own model.
 
-`.env` still controls API keys and default selections. API keys are never entered or
-shown in the web UI.
+API keys are configured in `.env` only and are never entered or shown in the web UI.
 
 ## Useful Commands
 
