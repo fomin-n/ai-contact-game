@@ -56,6 +56,10 @@
     grid-template-columns: 1fr;
   }
 
+  .intro p {
+    display: none;
+  }
+
   .intro-actions {
     justify-self: start;
   }
