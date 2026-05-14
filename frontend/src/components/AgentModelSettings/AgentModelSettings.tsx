@@ -1,4 +1,4 @@
-import type { AgentModelSelection, ProviderModelCatalog, RoleModelSelection } from "../../types/game";
+import type { AgentModelSelection, ProviderModelCatalog } from "../../types/game";
 import type { UiCopy } from "../../i18n/copy";
 import "./AgentModelSettings.css";
 
@@ -10,75 +10,13 @@ function roleLabel(labels: UiCopy, role: ModelRole): string {
   return role === "wordMaster" ? labels.wordMaster : role === "playerA" ? labels.playerA : labels.playerB;
 }
 
-function providerFor(catalog: ProviderModelCatalog[], providerId: string): ProviderModelCatalog | undefined {
-  return catalog.find((p) => p.id === providerId);
+function encode(providerId: string, modelId: string): string {
+  return `${providerId}:${modelId}`;
 }
 
-function firstModel(provider: ProviderModelCatalog | undefined): string {
-  return provider?.defaultModel || provider?.models[0]?.id || "";
-}
-
-type SelectPairProps = {
-  providerId: string;
-  modelId: string;
-  catalog: ProviderModelCatalog[];
-  disabled: boolean;
-  providerLabel: string;
-  modelLabel: string;
-  providerAriaLabel: string;
-  modelAriaLabel: string;
-  onProviderChange: (id: string) => void;
-  onModelChange: (id: string) => void;
-};
-
-function SelectPair({
-  providerId,
-  modelId,
-  catalog,
-  disabled,
-  providerLabel,
-  modelLabel,
-  providerAriaLabel,
-  modelAriaLabel,
-  onProviderChange,
-  onModelChange,
-}: SelectPairProps) {
-  const provider = providerFor(catalog, providerId) ?? catalog[0];
-  return (
-    <>
-      <label className="select-field">
-        <span>{providerLabel}</span>
-        <select
-          value={providerId}
-          disabled={disabled}
-          aria-label={providerAriaLabel}
-          onChange={(e) => onProviderChange(e.target.value)}
-        >
-          {catalog.map((p) => (
-            <option value={p.id} disabled={!p.hasApiKey} key={p.id}>
-              {p.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="select-field">
-        <span>{modelLabel}</span>
-        <select
-          value={modelId}
-          disabled={disabled || !provider}
-          aria-label={modelAriaLabel}
-          onChange={(e) => onModelChange(e.target.value)}
-        >
-          {(provider?.models ?? []).map((m) => (
-            <option value={m.id} key={m.id}>
-              {m.displayName}
-              {m.isCustom ? " (custom)" : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-    </>
-  );
+function decode(value: string): { providerId: string; modelId: string } {
+  const idx = value.indexOf(":");
+  return { providerId: value.slice(0, idx), modelId: value.slice(idx + 1) };
 }
 
 type AgentModelSettingsProps = {
@@ -96,17 +34,9 @@ export function AgentModelSettings({
   disabled,
   onSelectionChange,
 }: AgentModelSettingsProps) {
-  function updateRole(role: ModelRole, next: RoleModelSelection) {
-    onSelectionChange({ ...selection, [role]: next });
-  }
-
-  function handleProviderChange(role: ModelRole, providerId: string) {
-    const provider = providerFor(catalog, providerId);
-    updateRole(role, { provider: providerId, model: firstModel(provider) });
-  }
-
-  function handleModelChange(role: ModelRole, modelId: string) {
-    updateRole(role, { ...selection[role], model: modelId });
+  function handleChange(role: ModelRole, value: string) {
+    const { providerId, modelId } = decode(value);
+    onSelectionChange({ ...selection, [role]: { provider: providerId, model: modelId } });
   }
 
   return (
@@ -123,20 +53,28 @@ export function AgentModelSettings({
             return (
               <div className="role-row" key={role}>
                 <span className="role-row-name">{roleName}</span>
-                <div className="role-row-selects">
-                  <SelectPair
-                    providerId={rs.provider}
-                    modelId={rs.model}
-                    catalog={catalog}
-                    disabled={disabled}
-                    providerLabel={labels.provider}
-                    modelLabel={labels.model}
-                    providerAriaLabel={`${roleName} — ${labels.provider}`}
-                    modelAriaLabel={`${roleName} — ${labels.model}`}
-                    onProviderChange={(id) => handleProviderChange(role, id)}
-                    onModelChange={(id) => handleModelChange(role, id)}
-                  />
-                </div>
+                <select
+                  className="role-model-select"
+                  value={encode(rs.provider, rs.model)}
+                  disabled={disabled}
+                  aria-label={roleName}
+                  onChange={(e) => handleChange(role, e.target.value)}
+                >
+                  {catalog.map((provider) => (
+                    <optgroup label={provider.displayName} key={provider.id}>
+                      {provider.models.map((model) => (
+                        <option
+                          value={encode(provider.id, model.id)}
+                          key={model.id}
+                          disabled={!provider.hasApiKey}
+                        >
+                          {model.id}
+                          {model.isCustom ? " (custom)" : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
             );
           })}

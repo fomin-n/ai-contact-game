@@ -1,5 +1,3 @@
-/* ── Panel layout ────────────────────────────────────── */
-
 .ai-models-panel {
   display: grid;
   gap: 10px;
@@ -9,8 +7,6 @@
 .ai-models-heading {
   margin: 0;
 }
-
-/* ── Role rows ───────────────────────────────────────── */
 
 .role-rows {
   display: grid;
@@ -34,28 +30,7 @@
   color: #17201b;
 }
 
-.role-row-selects {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-/* ── Select fields ───────────────────────────────────── */
-
-.select-field {
-  display: grid;
-  gap: 4px;
-}
-
-.select-field > span {
-  color: #63706a;
-  font-size: 0.73rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.select-field select {
+.role-model-select {
   min-height: 34px;
   padding: 0 8px;
   font-size: 0.84rem;
