@@ -41,9 +41,6 @@ export function Timeline({
 
   return (
     <>
-      <header>
-        <h2>{labels.timeline}</h2>
-      </header>
       <div
         className={`timeline${!messages.length && !pendingUserInput ? " timeline-empty" : ""}`}
         aria-live="polite"
