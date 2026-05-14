@@ -27,9 +27,6 @@ const modelSelectionStorageKey = "ai-contact-game:model-selection";
 
 export type ModelSelectionMode = "same" | "advanced";
 
-const roleKeys = ["wordMaster", "playerA", "playerB"] as const;
-type ModelRoleKey = (typeof roleKeys)[number];
-
 function getErrorMessage(error: unknown): string | null {
   if (!error) return null;
   return error instanceof Error ? error.message : String(error);

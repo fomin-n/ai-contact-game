@@ -1,17 +1,10 @@
 from __future__ import annotations
 
 import os
-import re
 from typing import Any
 
 from .base import LLMProvider
-from .http_json import post_chat_completion
-
-
-def _schema_name(schema: dict[str, Any] | None) -> str:
-    raw_name = str((schema or {}).get("title") or "contact_game_response")
-    name = re.sub(r"[^a-zA-Z0-9_-]+", "_", raw_name).strip("_")
-    return name or "contact_game_response"
+from .http_json import _schema_name, post_chat_completion
 
 
 class OpenAICompatibleProvider(LLMProvider):

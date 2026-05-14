@@ -35,6 +35,12 @@ class ProviderCapacityError(RuntimeError):
         self.retry_after_seconds = retry_after_seconds
 
 
+def _schema_name(schema: dict[str, Any] | None) -> str:
+    raw_name = str((schema or {}).get("title") or "contact_game_response")
+    name = re.sub(r"[^a-zA-Z0-9_-]+", "_", raw_name).strip("_")
+    return name or "contact_game_response"
+
+
 def _retry_after_seconds(value: str | None) -> float | None:
     if not value:
         return None

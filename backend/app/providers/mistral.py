@@ -4,8 +4,7 @@ import os
 from typing import Any
 
 from .base import LLMProvider
-from .http_json import post_chat_completion
-from .openai_compatible import _schema_name
+from .http_json import _schema_name, post_chat_completion
 
 
 class MistralProvider(LLMProvider):
