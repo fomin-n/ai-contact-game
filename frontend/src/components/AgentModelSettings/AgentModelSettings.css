@@ -142,41 +142,6 @@
   font-size: 0.78rem;
 }
 
-/* ── Status dot ──────────────────────────────────────── */
-
-.status-dot {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.76rem;
-  font-weight: 700;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.status-circle {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.status-ready {
-  color: #235a50;
-}
-
-.status-ready .status-circle {
-  background: #4caf87;
-}
-
-.status-incomplete {
-  color: #8a5a18;
-}
-
-.status-incomplete .status-circle {
-  background: #d9a244;
-}
-
 /* ── Advanced mode role rows ─────────────────────────── */
 
 .role-rows {
@@ -193,13 +158,6 @@
 .role-row:first-child {
   border-top: none;
   padding-top: 2px;
-}
-
-.role-row-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 
 .role-row-name {

@@ -51,22 +51,6 @@ function ToggleSwitch({ checked, disabled, onChange, label }: ToggleSwitchProps)
   );
 }
 
-type StatusDotProps = {
-  ok: boolean;
-  labels: UiCopy;
-};
-
-function StatusDot({ ok, labels }: StatusDotProps) {
-  return (
-    <span
-      className={`status-dot ${ok ? "status-ready" : "status-incomplete"}`}
-      aria-label={ok ? labels.statusReady : labels.statusIncomplete}
-      title={ok ? labels.statusReady : labels.statusIncomplete}
-    >
-      <span className="status-circle" aria-hidden="true" />
-    </span>
-  );
-}
 
 type SelectPairProps = {
   providerId: string;
@@ -165,7 +149,6 @@ export function AgentModelSettings({
     updateRole(role, { ...selection[role], model: modelId });
   }
 
-  const sharedProvider = providerFor(catalog, selection.wordMaster.provider) ?? catalog[0];
   const sharedModelName = modelDisplayName(catalog, selection.wordMaster.provider, selection.wordMaster.model);
 
   return (
@@ -199,7 +182,6 @@ export function AgentModelSettings({
             />
           </div>
           <div className="shared-meta">
-            <StatusDot ok={!!sharedProvider?.hasApiKey} labels={labels} />
             <span className="shared-meta-text">
               {labels.currentSetup} {sharedModelName} {labels.forAllRoles}
             </span>
@@ -215,13 +197,11 @@ export function AgentModelSettings({
           <div className="role-rows">
             {roleOrder.map((role) => {
               const rs = selection[role];
-              const provider = providerFor(catalog, rs.provider) ?? catalog[0];
               const roleName = roleLabel(labels, role);
               return (
                 <div className="role-row" key={role}>
                   <div className="role-row-header">
                     <span className="role-row-name">{roleName}</span>
-                    <StatusDot ok={!!provider?.hasApiKey} labels={labels} />
                   </div>
                   <div className="role-row-selects">
                     <SelectPair
