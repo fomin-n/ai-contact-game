@@ -6,143 +6,11 @@
   padding: 14px;
 }
 
-/* ── Header ──────────────────────────────────────────── */
-
-.ai-models-header {
-  display: grid;
-  gap: 8px;
-}
-
-/* ── Toggle switch ───────────────────────────────────── */
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  cursor: pointer;
-  user-select: none;
-  color: #4e5752;
-  font-size: 0.84rem;
-  font-weight: 700;
-  width: fit-content;
-}
-
-.toggle-row-disabled {
-  opacity: 0.62;
-  cursor: not-allowed;
-}
-
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  flex-shrink: 0;
-  width: 34px;
-  height: 19px;
-}
-
-.toggle-switch > input[type="checkbox"] {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
+.ai-models-heading {
   margin: 0;
-  opacity: 0;
-  cursor: pointer;
-  z-index: 1;
 }
 
-.toggle-switch > input[type="checkbox"]:disabled {
-  cursor: not-allowed;
-}
-
-.toggle-track {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  background: #c4bfb5;
-  transition: background 160ms ease;
-  pointer-events: none;
-}
-
-.toggle-track::before {
-  content: "";
-  position: absolute;
-  width: 13px;
-  height: 13px;
-  left: 3px;
-  top: 3px;
-  border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
-  transition: transform 160ms ease;
-}
-
-.toggle-switch > input[type="checkbox"]:checked + .toggle-track {
-  background: #235a50;
-}
-
-.toggle-switch > input[type="checkbox"]:checked + .toggle-track::before {
-  transform: translateX(15px);
-}
-
-.toggle-switch > input[type="checkbox"]:focus-visible + .toggle-track {
-  outline: 3px solid rgba(35, 90, 80, 0.24);
-  outline-offset: 2px;
-  border-radius: 999px;
-}
-
-/* ── Shared selector (same mode) ─────────────────────── */
-
-.shared-selector {
-  display: grid;
-  gap: 8px;
-}
-
-.shared-selects {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.select-field {
-  display: grid;
-  gap: 4px;
-}
-
-.select-field > span {
-  color: #63706a;
-  font-size: 0.73rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.select-field select {
-  min-height: 34px;
-  padding: 0 8px;
-  font-size: 0.84rem;
-  border-radius: 6px;
-}
-
-.shared-meta {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.shared-meta-text {
-  color: #4e5752;
-  font-size: 0.82rem;
-}
-
-.applied-to {
-  margin: 0;
-  color: #718077;
-  font-size: 0.78rem;
-}
-
-/* ── Advanced mode role rows ─────────────────────────── */
+/* ── Role rows ───────────────────────────────────────── */
 
 .role-rows {
   display: grid;
@@ -172,22 +40,24 @@
   gap: 8px;
 }
 
-/* ── Role summary line ───────────────────────────────── */
+/* ── Select fields ───────────────────────────────────── */
 
-.role-summary {
-  margin: 0;
-  font-size: 0.77rem;
+.select-field {
+  display: grid;
+  gap: 4px;
+}
+
+.select-field > span {
   color: #63706a;
-  line-height: 1.55;
-  border-top: 1px solid #ede8df;
-  padding-top: 8px;
+  font-size: 0.73rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.role-summary strong {
-  color: #3d4d46;
-  font-weight: 700;
-}
-
-.summary-sep {
-  color: #b0b8b2;
+.select-field select {
+  min-height: 34px;
+  padding: 0 8px;
+  font-size: 0.84rem;
+  border-radius: 6px;
 }

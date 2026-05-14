@@ -1,5 +1,4 @@
 import type { AgentModelSelection, ProviderModelCatalog, RoleModelSelection } from "../../types/game";
-import type { ModelSelectionMode } from "../../hooks/useGameController";
 import type { UiCopy } from "../../i18n/copy";
 import "./AgentModelSettings.css";
 
@@ -19,39 +18,6 @@ function firstModel(provider: ProviderModelCatalog | undefined): string {
   return provider?.defaultModel || provider?.models[0]?.id || "";
 }
 
-function modelDisplayName(catalog: ProviderModelCatalog[], providerId: string, modelId: string): string {
-  return providerFor(catalog, providerId)?.models.find((m) => m.id === modelId)?.displayName ?? modelId;
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-type ToggleSwitchProps = {
-  checked: boolean;
-  disabled: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-};
-
-function ToggleSwitch({ checked, disabled, onChange, label }: ToggleSwitchProps) {
-  return (
-    <label className={`toggle-row${disabled ? " toggle-row-disabled" : ""}`}>
-      <span className="toggle-switch">
-        <input
-          type="checkbox"
-          role="switch"
-          checked={checked}
-          disabled={disabled}
-          aria-label={label}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <span className="toggle-track" aria-hidden="true" />
-      </span>
-      <span>{label}</span>
-    </label>
-  );
-}
-
-
 type SelectPairProps = {
   providerId: string;
   modelId: string;
@@ -59,8 +25,8 @@ type SelectPairProps = {
   disabled: boolean;
   providerLabel: string;
   modelLabel: string;
-  providerAriaLabel?: string;
-  modelAriaLabel?: string;
+  providerAriaLabel: string;
+  modelAriaLabel: string;
   onProviderChange: (id: string) => void;
   onModelChange: (id: string) => void;
 };
@@ -115,15 +81,11 @@ function SelectPair({
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 type AgentModelSettingsProps = {
   labels: UiCopy;
   catalog: ProviderModelCatalog[];
   selection: AgentModelSelection;
-  mode: ModelSelectionMode;
   disabled: boolean;
-  onModeChange: (mode: ModelSelectionMode) => void;
   onSelectionChange: (selection: AgentModelSelection) => void;
 };
 
@@ -131,9 +93,7 @@ export function AgentModelSettings({
   labels,
   catalog,
   selection,
-  mode,
   disabled,
-  onModeChange,
   onSelectionChange,
 }: AgentModelSettingsProps) {
   function updateRole(role: ModelRole, next: RoleModelSelection) {
@@ -149,79 +109,38 @@ export function AgentModelSettings({
     updateRole(role, { ...selection[role], model: modelId });
   }
 
-  const sharedModelName = modelDisplayName(catalog, selection.wordMaster.provider, selection.wordMaster.model);
-
   return (
     <section className="panel ai-models-panel" aria-label={labels.aiModels}>
-      <header className="ai-models-header">
-        <h2>{labels.aiModels}</h2>
-        {!!catalog.length && (
-          <ToggleSwitch
-            checked={mode === "same"}
-            disabled={disabled}
-            onChange={(checked) => onModeChange(checked ? "same" : "advanced")}
-            label={labels.useSameModel}
-          />
-        )}
-      </header>
+      <h2 className="ai-models-heading">{labels.aiModels}</h2>
 
       {!catalog.length && <p className="muted">...</p>}
 
-      {!!catalog.length && mode === "same" && (
-        <div className="shared-selector">
-          <div className="shared-selects">
-            <SelectPair
-              providerId={selection.wordMaster.provider}
-              modelId={selection.wordMaster.model}
-              catalog={catalog}
-              disabled={disabled}
-              providerLabel={labels.provider}
-              modelLabel={labels.model}
-              onProviderChange={(id) => handleProviderChange("wordMaster", id)}
-              onModelChange={(id) => handleModelChange("wordMaster", id)}
-            />
-          </div>
-          <div className="shared-meta">
-            <span className="shared-meta-text">
-              {labels.currentSetup} {sharedModelName} {labels.forAllRoles}
-            </span>
-          </div>
-          <p className="applied-to">
-            {labels.appliedTo} {labels.wordMaster}, {labels.playerA}, {labels.playerB}
-          </p>
-        </div>
-      )}
-
-      {!!catalog.length && mode === "advanced" && (
-        <>
-          <div className="role-rows">
-            {roleOrder.map((role) => {
-              const rs = selection[role];
-              const roleName = roleLabel(labels, role);
-              return (
-                <div className="role-row" key={role}>
-                  <div className="role-row-header">
-                    <span className="role-row-name">{roleName}</span>
-                  </div>
-                  <div className="role-row-selects">
-                    <SelectPair
-                      providerId={rs.provider}
-                      modelId={rs.model}
-                      catalog={catalog}
-                      disabled={disabled}
-                      providerLabel={labels.provider}
-                      modelLabel={labels.model}
-                      providerAriaLabel={`${roleName} — ${labels.provider}`}
-                      modelAriaLabel={`${roleName} — ${labels.model}`}
-                      onProviderChange={(id) => handleProviderChange(role, id)}
-                      onModelChange={(id) => handleModelChange(role, id)}
-                    />
-                  </div>
+      {!!catalog.length && (
+        <div className="role-rows">
+          {roleOrder.map((role) => {
+            const rs = selection[role];
+            const roleName = roleLabel(labels, role);
+            return (
+              <div className="role-row" key={role}>
+                <span className="role-row-name">{roleName}</span>
+                <div className="role-row-selects">
+                  <SelectPair
+                    providerId={rs.provider}
+                    modelId={rs.model}
+                    catalog={catalog}
+                    disabled={disabled}
+                    providerLabel={labels.provider}
+                    modelLabel={labels.model}
+                    providerAriaLabel={`${roleName} — ${labels.provider}`}
+                    modelAriaLabel={`${roleName} — ${labels.model}`}
+                    onProviderChange={(id) => handleProviderChange(role, id)}
+                    onModelChange={(id) => handleModelChange(role, id)}
+                  />
                 </div>
-              );
-            })}
-          </div>
-        </>
+              </div>
+            );
+          })}
+        </div>
       )}
     </section>
   );

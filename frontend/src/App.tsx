@@ -38,13 +38,11 @@ function App() {
     isSubmittingUserInput,
     language,
     modelCatalog,
-    modelSelectionMode,
     playerAPersonality,
     playerBPersonality,
     resetGame,
     setAgentModelSelection,
     setCustomSecretWord,
-    setModelSelectionMode,
     setPlayerAPersonality,
     setPlayerBPersonality,
     startGame,
@@ -113,9 +111,7 @@ function App() {
             labels={inputLabels}
             catalog={modelCatalog}
             selection={agentModelSelection}
-            mode={modelSelectionMode}
             disabled={isRunning || isRequesting}
-            onModeChange={setModelSelectionMode}
             onSelectionChange={setAgentModelSelection}
           />
 

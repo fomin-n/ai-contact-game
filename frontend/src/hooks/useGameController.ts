@@ -25,8 +25,6 @@ const configQueryKey = ["config"] as const;
 const gameStateQueryKey = ["gameState"] as const;
 const modelSelectionStorageKey = "ai-contact-game:model-selection";
 
-export type ModelSelectionMode = "same" | "advanced";
-
 function getErrorMessage(error: unknown): string | null {
   if (!error) return null;
   return error instanceof Error ? error.message : String(error);
@@ -70,17 +68,7 @@ function sanitizeAgentModelSelection(
   };
 }
 
-function sameSelection(selection: AgentModelSelection): AgentModelSelection {
-  return {
-    wordMaster: selection.wordMaster,
-    playerA: selection.wordMaster,
-    playerB: selection.wordMaster
-  };
-}
-
-function readStoredModelSelection():
-  | { mode?: ModelSelectionMode; selection?: AgentModelSelection }
-  | null {
+function readStoredModelSelection(): { selection?: AgentModelSelection } | null {
   try {
     const raw = window.localStorage.getItem(modelSelectionStorageKey);
     return raw ? JSON.parse(raw) : null;
@@ -103,13 +91,11 @@ type UseGameControllerResult = {
   language: Language;
   humanRole: HumanRole;
   modelCatalog: ProviderModelCatalog[];
-  modelSelectionMode: ModelSelectionMode;
   playerAPersonality: string;
   playerBPersonality: string;
   resetGame: () => void;
   setCustomSecretWord: (value: string) => void;
   setAgentModelSelection: (value: AgentModelSelection) => void;
-  setModelSelectionMode: (value: ModelSelectionMode) => void;
   setPlayerAPersonality: (value: string) => void;
   setPlayerBPersonality: (value: string) => void;
   startGame: () => void;
@@ -127,7 +113,6 @@ export function useGameController(): UseGameControllerResult {
   const [playerAPersonality, setPlayerAPersonality] = useState(defaultPersonalities.en.playerA);
   const [playerBPersonality, setPlayerBPersonality] = useState(defaultPersonalities.en.playerB);
   const [customSecretWord, setCustomSecretWord] = useState("");
-  const [modelSelectionMode, setModelSelectionMode] = useState<ModelSelectionMode>("same");
   const [agentModelSelection, setAgentModelSelection] = useState<AgentModelSelection>({
     wordMaster: { provider: initialProviderInfo.providers.wordMasterProvider, model: initialProviderInfo.models.wordMasterModel },
     playerA: { provider: initialProviderInfo.providers.playerAProvider, model: initialProviderInfo.models.playerAModel },
@@ -229,14 +214,12 @@ export function useGameController(): UseGameControllerResult {
     if (!configQuery.data || modelSelectionSyncDone.current) return;
 
     const stored = readStoredModelSelection();
-    const storedMode = stored?.mode === "advanced" ? "advanced" : "same";
     const sanitized = sanitizeAgentModelSelection(
       stored?.selection,
       configQuery.data.defaultAgentModelSelection,
       configQuery.data.modelCatalog
     );
-    setModelSelectionMode(storedMode);
-    setAgentModelSelection(storedMode === "same" ? sameSelection(sanitized) : sanitized);
+    setAgentModelSelection(sanitized);
     modelSelectionSyncDone.current = true;
   }, [configQuery.data]);
 
@@ -245,15 +228,12 @@ export function useGameController(): UseGameControllerResult {
     try {
       window.localStorage.setItem(
         modelSelectionStorageKey,
-        JSON.stringify({
-          mode: modelSelectionMode,
-          selection: modelSelectionMode === "same" ? sameSelection(agentModelSelection) : agentModelSelection
-        })
+        JSON.stringify({ selection: agentModelSelection })
       );
     } catch {
       // localStorage is optional for this UI preference.
     }
-  }, [agentModelSelection, modelSelectionMode]);
+  }, [agentModelSelection]);
 
   function handleLanguageChange(nextLanguage: Language) {
     setLanguage(nextLanguage);
@@ -275,16 +255,8 @@ export function useGameController(): UseGameControllerResult {
     }
   }
 
-  function handleModelSelectionModeChange(nextMode: ModelSelectionMode) {
-    setModelSelectionMode(nextMode);
-    if (nextMode === "same") {
-      setAgentModelSelection((current) => sameSelection(current));
-    }
-  }
-
   function handleAgentModelSelectionChange(nextSelection: AgentModelSelection) {
-    const sanitized = sanitizeAgentModelSelection(nextSelection, defaultAgentModelSelection, modelCatalog);
-    setAgentModelSelection(modelSelectionMode === "same" ? sameSelection(sanitized) : sanitized);
+    setAgentModelSelection(sanitizeAgentModelSelection(nextSelection, defaultAgentModelSelection, modelCatalog));
   }
 
   function startGame() {
@@ -293,7 +265,7 @@ export function useGameController(): UseGameControllerResult {
       playerAPersonality,
       playerBPersonality,
       humanRole,
-      agentModelSelection: modelSelectionMode === "same" ? sameSelection(agentModelSelection) : agentModelSelection,
+      agentModelSelection,
       secretWord: humanRole === "playerA" ? undefined : customSecretWord.trim() || undefined,
       maxTurns: DEFAULT_MAX_TURNS
     });
@@ -330,13 +302,11 @@ export function useGameController(): UseGameControllerResult {
     language,
     humanRole,
     modelCatalog,
-    modelSelectionMode,
     playerAPersonality,
     playerBPersonality,
     resetGame,
     setAgentModelSelection: handleAgentModelSelectionChange,
     setCustomSecretWord,
-    setModelSelectionMode: handleModelSelectionModeChange,
     setPlayerAPersonality,
     setPlayerBPersonality,
     startGame,
