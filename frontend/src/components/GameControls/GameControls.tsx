@@ -41,17 +41,24 @@ export function GameControls({
 }: GameControlsProps) {
   return (
     <form className="panel controls" onSubmit={(event) => event.preventDefault()}>
-      <label className="field">
-        <span>{labels.language}</span>
-        <select
-          value={language}
-          onChange={(event) => onLanguageChange(event.target.value as Language)}
-          disabled={isDisabled}
-        >
-          <option value="en">{labels.english}</option>
-          <option value="ru">{labels.russian}</option>
-        </select>
-      </label>
+      <fieldset className="lang-switch-field">
+        <legend>{labels.language}</legend>
+        <div className="lang-switch">
+          {(["en", "ru"] as Language[]).map((lang) => (
+            <label className="lang-option" data-active={language === lang} key={lang}>
+              <input
+                type="radio"
+                name="language"
+                value={lang}
+                checked={language === lang}
+                disabled={isDisabled}
+                onChange={() => onLanguageChange(lang)}
+              />
+              <span>{lang === "en" ? labels.english : labels.russian}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       <ModeSegmentedControl
         labels={labels}

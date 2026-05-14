@@ -52,7 +52,7 @@ export const copy = {
     modeNone: "AI vs AI",
     modeWordMaster: "Play as Word Master",
     modePlayerA: "Play as Player A",
-    start: "Let them play",
+    start: "Start game",
     reset: "Reset game",
     secretWord: "Secret word",
     optionalSecretWord: "Secret word",
