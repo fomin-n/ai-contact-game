@@ -36,6 +36,41 @@ export type ProviderInfo = {
   providers: AgentProviderInfo;
 };
 
+export type RoleModelSelection = {
+  provider: string;
+  model: string;
+};
+
+export type AgentModelSelection = {
+  wordMaster: RoleModelSelection;
+  playerA: RoleModelSelection;
+  playerB: RoleModelSelection;
+};
+
+export type ModelOption = {
+  id: string;
+  displayName: string;
+  description?: string | null;
+  recommendedFor?: string | null;
+  isDefault: boolean;
+  isCustom: boolean;
+  supportsJsonSchema: boolean;
+};
+
+export type ProviderModelCatalog = {
+  id: string;
+  displayName: string;
+  hasApiKey: boolean;
+  defaultModel: string;
+  models: ModelOption[];
+};
+
+export type ConfigResponse = {
+  providerInfo: ProviderInfo;
+  modelCatalog: ProviderModelCatalog[];
+  defaultAgentModelSelection: AgentModelSelection;
+};
+
 export type GameMessage = {
   id: string;
   role: Role;

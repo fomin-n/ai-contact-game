@@ -3,9 +3,17 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from .model_catalog import known_provider_ids
 from .providers.base import LLMProvider
 from .providers.factory import create_provider
-from .schemas import AgentModelConfig, AgentModelInfo, AgentProviderInfo, ProviderInfo
+from .schemas import (
+    AgentModelConfig,
+    AgentModelInfo,
+    AgentModelSelection,
+    AgentProviderInfo,
+    ProviderInfo,
+    RoleModelSelection,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +54,72 @@ def load_agent_model_config(providers: AgentProviderConfig) -> AgentModelConfig:
         word_master_model=_model_for_role("WORD_MASTER", providers.word_master_provider),
         player_a_model=_model_for_role("PLAYER_A", providers.player_a_provider),
         player_b_model=_model_for_role("PLAYER_B", providers.player_b_provider),
+    )
+
+
+def default_agent_model_selection(providers: AgentProviderConfig, models: AgentModelConfig) -> AgentModelSelection:
+    return AgentModelSelection(
+        wordMaster=RoleModelSelection(
+            provider=providers.word_master_provider.name,
+            model=models.word_master_model,
+        ),
+        playerA=RoleModelSelection(
+            provider=providers.player_a_provider.name,
+            model=models.player_a_model,
+        ),
+        playerB=RoleModelSelection(
+            provider=providers.player_b_provider.name,
+            model=models.player_b_model,
+        ),
+    )
+
+
+def _normalize_provider_id(provider_id: str) -> str:
+    return provider_id.strip().lower()
+
+
+def _validate_role_selection(role_name: str, selection: RoleModelSelection) -> tuple[LLMProvider, str]:
+    provider_id = _normalize_provider_id(selection.provider)
+    if provider_id not in known_provider_ids():
+        raise ValueError(f"Unknown provider for {role_name}: {selection.provider}")
+    model = selection.model.strip()
+    if not model:
+        raise ValueError(f"Model id for {role_name} must not be empty.")
+    provider = create_provider(provider_id)
+    if not provider.has_api_key:
+        raise ValueError(f"{provider.display_name} API key is not configured for {role_name}.")
+    return provider, model
+
+
+def resolve_agent_configs(
+    selection: AgentModelSelection | None,
+    default_providers: AgentProviderConfig,
+    default_models: AgentModelConfig,
+) -> tuple[AgentProviderConfig, AgentModelConfig]:
+    if selection is None:
+        for role_name, provider in (
+            ("Word Master", default_providers.word_master_provider),
+            ("Player A", default_providers.player_a_provider),
+            ("Player B", default_providers.player_b_provider),
+        ):
+            if not provider.has_api_key:
+                raise ValueError(f"{provider.display_name} API key is not configured for {role_name}.")
+        return default_providers, default_models
+
+    word_master_provider, word_master_model = _validate_role_selection("Word Master", selection.wordMaster)
+    player_a_provider, player_a_model = _validate_role_selection("Player A", selection.playerA)
+    player_b_provider, player_b_model = _validate_role_selection("Player B", selection.playerB)
+    return (
+        AgentProviderConfig(
+            word_master_provider=word_master_provider,
+            player_a_provider=player_a_provider,
+            player_b_provider=player_b_provider,
+        ),
+        AgentModelConfig(
+            word_master_model=word_master_model,
+            player_a_model=player_a_model,
+            player_b_model=player_b_model,
+        ),
     )
 
 

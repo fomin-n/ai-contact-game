@@ -1,4 +1,11 @@
-import type { GameState, HumanRole, Language, PendingInputKind, ProviderInfo } from "../types/game";
+import type {
+  AgentModelSelection,
+  ConfigResponse,
+  GameState,
+  HumanRole,
+  Language,
+  PendingInputKind
+} from "../types/game";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -7,6 +14,7 @@ export type StartGameParams = {
   playerAPersonality: string;
   playerBPersonality: string;
   humanRole?: HumanRole;
+  agentModelSelection?: AgentModelSelection;
   secretWord?: string;
   maxTurns?: number;
 };
@@ -42,7 +50,7 @@ async function requestJson<T>(path: string, options: RequestInit = {}): Promise<
   return response.json() as Promise<T>;
 }
 
-export function getConfig(): Promise<{ providerInfo: ProviderInfo }> {
+export function getConfig(): Promise<ConfigResponse> {
   return requestJson("/api/config");
 }
 

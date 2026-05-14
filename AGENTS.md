@@ -29,6 +29,7 @@ The frontend is observer-only. All game rules, prompts, LLM calls, state transit
 - `backend/app/agents.py`: LLM task helpers, validation, retry/repair behavior.
 - `backend/app/word_utils.py`: deterministic normalization and word comparison.
 - `backend/app/config.py`: provider/model configuration from environment variables.
+- `backend/app/model_catalog.py`: static backend-owned provider/model catalog returned by `/api/config`.
 - `backend/app/event_log.py`: JSONL event logging with secret redaction.
 - `backend/app/prompt_loader.py`: YAML prompt loading/rendering.
 - `backend/app/providers/`: provider interface and implementations.
@@ -122,7 +123,7 @@ cd ..
 .venv/bin/python -m unittest discover backend/tests
 ```
 
-The backend unit tests currently cover LLM retry-feedback behavior.
+The backend unit tests currently cover LLM retry-feedback behavior and provider/model selection resolution.
 
 ## Environment Variables
 
@@ -160,6 +161,8 @@ Do not hardcode API keys. Do not commit `.env*` files.
 
 `.env` is loaded by `scripts/dev.sh` as a shell-compatible file. Keep it to simple `KEY=value` lines. `.env.example` is intentionally safe to commit and should not contain real credentials.
 
+The web UI can choose among configured providers/models per game run. Environment variables still define startup defaults and credentials. The frontend receives only provider/model ids, display names, and `hasApiKey` booleans; it must never receive API key values.
+
 ## Provider Architecture
 
 Game logic depends on `LLMProvider`, not on concrete providers.
@@ -171,13 +174,32 @@ Current provider files:
 - `backend/app/providers/openai_compatible.py`: OpenAI-compatible provider.
 - `backend/app/providers/http_json.py`: shared Chat Completions HTTP/JSON handling, response parsing, capacity errors.
 - `backend/app/providers/factory.py`: provider selection.
+- `backend/app/model_catalog.py`: curated static provider/model options exposed to the UI.
 
 To add a provider:
 
 1. Implement `LLMProvider.chat_json(...)`.
 2. Register the provider in `factory.py`.
-3. Read API keys/models from environment variables in the provider class.
-4. Keep game logic provider-agnostic.
+3. Add provider/model options in `model_catalog.py`.
+4. Read API keys/models from environment variables in the provider class.
+5. Keep game logic provider-agnostic.
+
+Providers should pass JSON Schema response formats when a schema is provided and fall back to JSON object response formats otherwise. Python validators remain the final source of truth for game rules and structured output correctness.
+
+## Model Selection Flow
+
+The backend owns provider/model selection. The frontend only displays choices and sends the selected ids.
+
+- `/api/config` returns `providerInfo`, `modelCatalog`, and `defaultAgentModelSelection`.
+- `modelCatalog` is static and curated in `backend/app/model_catalog.py`; do not dynamically fetch provider model lists for this small app.
+- `modelCatalog[*].hasApiKey` is a boolean derived from environment variables. Never expose key values.
+- The frontend stores the last selected model UI state in `localStorage` and sends `StartGameRequest.agentModelSelection` when starting a game.
+- `backend/app/config.py::resolve_agent_configs(...)` validates provider ids, non-empty model ids, and API key presence.
+- Unknown providers fail with HTTP 400.
+- Unknown model ids are accepted for known providers if non-empty, so newly released or custom OpenAI-compatible models can be used without code changes.
+- `GameManager.start(...)` resolves per-run `AgentProviderConfig` and `AgentModelConfig`, stores them as the current run config, and `GameState.providerInfo` reflects the active run.
+- `_initialize_secret`, `_play_turn`, `choose_secret_word`, `generate_player_move`, `word_master_guess`, and `guess_partner_word` must use the current run config, not only startup defaults.
+- Reset may preserve the latest visible provider info; do not add server-side user persistence.
 
 ## Prompt Management
 
@@ -267,6 +289,7 @@ Frontend owns rendering only:
 
 - language selector
 - personality textareas
+- AI model/provider selection controls
 - start/reset buttons
 - game state display
 - chat-style timeline
@@ -274,7 +297,7 @@ Frontend owns rendering only:
 - compact model display
 - React Query config/game-state queries and start/reset mutations
 
-Do not move game rules, validation, prompt logic, provider logic, or turn logic into the frontend.
+Do not move game rules, validation, prompt logic, provider logic, or turn logic into the frontend. The frontend must not expose or request API keys.
 
 ## Runtime Logs
 

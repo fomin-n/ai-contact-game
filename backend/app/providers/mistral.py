@@ -5,6 +5,7 @@ from typing import Any
 
 from .base import LLMProvider
 from .http_json import post_chat_completion
+from .openai_compatible import _schema_name
 
 
 class MistralProvider(LLMProvider):
@@ -27,7 +28,16 @@ class MistralProvider(LLMProvider):
         model: str | None = None,
         temperature: float = 0.7,
     ) -> dict[str, Any]:
-        del schema
+        response_format = {"type": "json_object"}
+        if schema:
+            response_format = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": _schema_name(schema),
+                    "schema": schema,
+                    "strict": False,
+                },
+            }
         return await post_chat_completion(
             provider_name=self.name,
             base_url=self.base_url,
@@ -35,5 +45,5 @@ class MistralProvider(LLMProvider):
             model=model or self.default_model,
             messages=messages,
             temperature=temperature,
-            response_format={"type": "json_object"},
+            response_format=response_format,
         )

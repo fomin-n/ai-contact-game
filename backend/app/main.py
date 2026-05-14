@@ -4,8 +4,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from .config import load_agent_model_config, load_agent_provider_config
+from .config import default_agent_model_selection, load_agent_model_config, load_agent_provider_config
 from .game import GameManager
+from .model_catalog import build_model_catalog
 from .schemas import ConfigResponse, StartGameRequest, UserInputRequest
 
 load_dotenv()
@@ -35,7 +36,11 @@ async def health() -> dict:
 
 @app.get("/api/config", response_model=ConfigResponse)
 async def config() -> ConfigResponse:
-    return ConfigResponse(providerInfo=game_manager.get_provider_info())
+    return ConfigResponse(
+        providerInfo=game_manager.get_provider_info(),
+        modelCatalog=build_model_catalog(),
+        defaultAgentModelSelection=default_agent_model_selection(providers, models),
+    )
 
 
 @app.get("/api/game/state")

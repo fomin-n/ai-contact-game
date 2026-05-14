@@ -137,6 +137,8 @@ class GameManager:
         self.providers = providers
         self.models = models
         self.provider_info = provider_info(providers, models)
+        self._run_providers = providers
+        self._run_models = models
         self._lock = asyncio.Lock()
         self._run_id = 0
         self._task: asyncio.Task | None = None
@@ -151,6 +153,12 @@ class GameManager:
     def get_provider_info(self) -> ProviderInfo:
         return self.provider_info
 
+    def _resolve_run_configs(self, request: StartGameRequest) -> tuple[AgentProviderConfig, AgentModelConfig, ProviderInfo]:
+        from .config import resolve_agent_configs
+
+        providers, models = resolve_agent_configs(request.agentModelSelection, self.providers, self.models)
+        return providers, models, provider_info(providers, models)
+
     async def get_state(self) -> GameState:
         async with self._lock:
             return self._client_state(self._state)
@@ -162,15 +170,19 @@ class GameManager:
             raise ValueError("Secret word is required when playing as Word Master.")
         if request.humanRole == "playerA" and provided_secret:
             raise ValueError("Secret word cannot be provided when playing as Player A.")
+        run_providers, run_models, run_provider_info = self._resolve_run_configs(request)
         async with self._lock:
             self._run_id += 1
             run_id = self._run_id
+            self._run_providers = run_providers
+            self._run_models = run_models
             self._state = self._idle_state(
                 language=request.language,
                 player_a_personality=request.playerAPersonality,
                 player_b_personality=request.playerBPersonality,
                 max_turns=request.maxTurns,
                 human_role=request.humanRole,
+                provider_info=run_provider_info,
             )
             self._state.status = "running"
             if provided_secret:
@@ -184,6 +196,7 @@ class GameManager:
             request=request,
             state=state,
             providerInfo=self.provider_info,
+            runProviderInfo=run_provider_info,
             humanRole=request.humanRole,
         )
         write_event("human_role_selected", runId=run_id, humanRole=request.humanRole)
@@ -201,6 +214,7 @@ class GameManager:
                 player_b_personality=previous.playerBPersonality,
                 max_turns=previous.maxTurns,
                 human_role=previous.humanRole,
+                provider_info=previous.providerInfo,
             )
             write_event(
                 "game_reset",
@@ -272,6 +286,7 @@ class GameManager:
         player_b_personality: str,
         max_turns: int = 50,
         human_role: HumanRole = "none",
+        provider_info: ProviderInfo | None = None,
     ) -> GameState:
         return GameState(
             language=language,
@@ -279,7 +294,7 @@ class GameManager:
             maxTurns=max_turns,
             playerAPersonality=player_a_personality,
             playerBPersonality=player_b_personality,
-            providerInfo=self.provider_info,
+            providerInfo=provider_info or self.provider_info,
         )
 
     def _client_state(self, state: GameState) -> GameState:
@@ -591,8 +606,8 @@ class GameManager:
             )
         else:
             secret_result = await choose_secret_word(
-                provider=self.providers.word_master_provider,
-                models=self.models,
+                provider=self._run_providers.word_master_provider,
+                models=self._run_models,
                 language=state.language,
             )
             secret_word = normalize_word(secret_result["word"], state.language)
@@ -636,8 +651,8 @@ class GameManager:
         partner_name = player_label(state.language, partner)
         actor_personality = state.playerAPersonality if actor == "playerA" else state.playerBPersonality
         partner_personality = state.playerAPersonality if partner == "playerA" else state.playerBPersonality
-        actor_provider = self.providers.player_a_provider if actor == "playerA" else self.providers.player_b_provider
-        partner_provider = self.providers.player_a_provider if partner == "playerA" else self.providers.player_b_provider
+        actor_provider = self._run_providers.player_a_provider if actor == "playerA" else self._run_providers.player_b_provider
+        partner_provider = self._run_providers.player_a_provider if partner == "playerA" else self._run_providers.player_b_provider
         write_event(
             "turn_started",
             runId=run_id,
@@ -670,7 +685,7 @@ class GameManager:
         else:
             move = await generate_player_move(
                 provider=actor_provider,
-                models=self.models,
+                models=self._run_models,
                 player_name=actor_name,
                 player_role=actor,
                 language=state.language,
@@ -716,8 +731,8 @@ class GameManager:
         else:
             try:
                 master_guess = await word_master_guess(
-                    provider=self.providers.word_master_provider,
-                    models=self.models,
+                    provider=self._run_providers.word_master_provider,
+                    models=self._run_models,
                     language=state.language,
                     secret_word=state.secretWord,
                     current_prefix=state.currentPrefix,
@@ -813,7 +828,7 @@ class GameManager:
         else:
             partner_answer = await guess_partner_word(
                 provider=partner_provider,
-                models=self.models,
+                models=self._run_models,
                 player_name=partner_name,
                 player_role=partner,
                 language=state.language,

@@ -23,10 +23,20 @@
 }
 
 .model-row strong {
+  display: grid;
+  gap: 3px;
   color: #17201b;
   font-size: 0.95rem;
   line-height: 1.25;
   overflow-wrap: anywhere;
+}
+
+.model-row strong em {
+  color: #a8322a;
+  font-size: 0.74rem;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 @media (max-width: 780px) {

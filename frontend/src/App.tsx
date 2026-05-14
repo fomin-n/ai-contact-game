@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AppHeader } from "./components/AppHeader";
+import { AgentModelSettings } from "./components/AgentModelSettings";
 import { GameControls } from "./components/GameControls";
 import { GameStats } from "./components/GameStats";
 import { ModelPanel } from "./components/ModelPanel";
@@ -26,6 +27,7 @@ function App() {
   const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(getInitialSettingsCollapsed);
   const {
     activeProviderInfo,
+    agentModelSelection,
     customSecretWord,
     game,
     handleHumanRoleChange,
@@ -36,10 +38,14 @@ function App() {
     isStartDisabled,
     isSubmittingUserInput,
     language,
+    modelCatalog,
+    modelSelectionMode,
     playerAPersonality,
     playerBPersonality,
     resetGame,
+    setAgentModelSelection,
     setCustomSecretWord,
+    setModelSelectionMode,
     setPlayerAPersonality,
     setPlayerBPersonality,
     startGame,
@@ -102,6 +108,16 @@ function App() {
             onCustomSecretWordChange={setCustomSecretWord}
             onStart={handleStartGame}
             onReset={resetGame}
+          />
+
+          <AgentModelSettings
+            labels={inputLabels}
+            catalog={modelCatalog}
+            selection={agentModelSelection}
+            mode={modelSelectionMode}
+            disabled={isRunning || isRequesting}
+            onModeChange={setModelSelectionMode}
+            onSelectionChange={setAgentModelSelection}
           />
 
           <ModelPanel labels={visibleLabels} providerInfo={activeProviderInfo} />

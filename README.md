@@ -61,6 +61,15 @@ To install dependencies without starting servers:
 ./scripts/dev.sh --install-only
 ```
 
+## Choosing AI Models
+
+Set provider API keys in `.env`, start the app, then use **Settings → AI Models**.
+Simple mode uses one provider/model for all AI roles. Advanced mode lets you choose
+separate models for Word Master, Player A, and Player B.
+
+`.env` still controls API keys and default selections. API keys are never entered or
+shown in the web UI.
+
 ## Useful Commands
 
 ```bash

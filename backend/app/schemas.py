@@ -20,6 +20,17 @@ class AgentModelConfig:
     player_b_model: str
 
 
+class RoleModelSelection(BaseModel):
+    provider: str
+    model: str
+
+
+class AgentModelSelection(BaseModel):
+    wordMaster: RoleModelSelection
+    playerA: RoleModelSelection
+    playerB: RoleModelSelection
+
+
 class AgentProviderInfo(BaseModel):
     wordMasterProvider: str
     wordMasterDisplayName: str
@@ -44,6 +55,24 @@ class ProviderInfo(BaseModel):
     hasApiKey: bool
     models: AgentModelInfo
     providers: AgentProviderInfo
+
+
+class ModelOption(BaseModel):
+    id: str
+    displayName: str
+    description: str | None = None
+    recommendedFor: str | None = None
+    isDefault: bool = False
+    isCustom: bool = False
+    supportsJsonSchema: bool = True
+
+
+class ProviderModelCatalog(BaseModel):
+    id: str
+    displayName: str
+    hasApiKey: bool
+    defaultModel: str
+    models: list[ModelOption]
 
 
 class GameMessage(BaseModel):
@@ -90,6 +119,7 @@ class StartGameRequest(BaseModel):
     playerAPersonality: str
     playerBPersonality: str
     humanRole: HumanRole = "none"
+    agentModelSelection: AgentModelSelection | None = None
     secretWord: str | None = None
     maxTurns: int = Field(default=50, ge=1, le=200)
 
@@ -103,6 +133,8 @@ class UserInputRequest(BaseModel):
 
 class ConfigResponse(BaseModel):
     providerInfo: ProviderInfo
+    modelCatalog: list[ProviderModelCatalog]
+    defaultAgentModelSelection: AgentModelSelection
 
 
 class SecretWord(BaseModel):

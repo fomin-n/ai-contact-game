@@ -1,0 +1,81 @@
+.agent-model-settings {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.agent-model-settings header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.model-same-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4e5752;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.model-same-toggle input {
+  width: auto;
+  min-height: auto;
+}
+
+.agent-model-rows {
+  display: grid;
+  gap: 10px;
+}
+
+.agent-model-row {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e3ddcf;
+  border-radius: 8px;
+  background: #fffdf8;
+  padding: 10px;
+}
+
+.agent-model-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.agent-model-row-header strong {
+  color: #17201b;
+  font-size: 0.88rem;
+}
+
+.key-status {
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.key-status.configured {
+  background: #edf7f2;
+  color: #235a50;
+}
+
+.key-status.missing {
+  background: #fff3f1;
+  color: #a8322a;
+}
+
+.agent-model-row label {
+  display: grid;
+  gap: 5px;
+}
+
+.agent-model-row label span {
+  color: #63706a;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
