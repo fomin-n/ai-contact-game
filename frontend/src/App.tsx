@@ -3,7 +3,6 @@ import { AppHeader } from "./components/AppHeader";
 import { AgentModelSettings } from "./components/AgentModelSettings";
 import { GameControls } from "./components/GameControls";
 import { GameStats } from "./components/GameStats";
-import { ModelPanel } from "./components/ModelPanel";
 import { Notice } from "./components/Notice";
 import { RulesDialog } from "./components/RulesDialog";
 import { SettingsSidebar } from "./components/SettingsSidebar";
@@ -119,8 +118,6 @@ function App() {
             onModeChange={setModelSelectionMode}
             onSelectionChange={setAgentModelSelection}
           />
-
-          <ModelPanel labels={visibleLabels} providerInfo={activeProviderInfo} />
 
           {(!activeProviderInfo.hasApiKey || uiError) && (
             <Notice message={uiError || visibleLabels.apiKeyMissing} isError={Boolean(uiError)} />

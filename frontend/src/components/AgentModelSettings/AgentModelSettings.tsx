@@ -58,9 +58,12 @@ type StatusDotProps = {
 
 function StatusDot({ ok, labels }: StatusDotProps) {
   return (
-    <span className={`status-dot ${ok ? "status-ready" : "status-incomplete"}`}>
+    <span
+      className={`status-dot ${ok ? "status-ready" : "status-incomplete"}`}
+      aria-label={ok ? labels.statusReady : labels.statusIncomplete}
+      title={ok ? labels.statusReady : labels.statusIncomplete}
+    >
       <span className="status-circle" aria-hidden="true" />
-      {ok ? labels.statusReady : labels.statusIncomplete}
     </span>
   );
 }
@@ -238,15 +241,6 @@ export function AgentModelSettings({
               );
             })}
           </div>
-          <p className="role-summary">
-            {roleOrder.map((role, i) => (
-              <span key={role}>
-                {i > 0 && <span className="summary-sep"> · </span>}
-                <strong>{roleLabel(labels, role)}:</strong>{" "}
-                {modelDisplayName(catalog, selection[role].provider, selection[role].model)}
-              </span>
-            ))}
-          </p>
         </>
       )}
     </section>
