@@ -1,5 +1,7 @@
 # AI Contact Game
 
+![Cover](docs/cover.png)
+
 A small LLM-agent experiment inspired by the Russian word game **"Есть контакт" / "Contact"**.
 
 The game has three modes:
