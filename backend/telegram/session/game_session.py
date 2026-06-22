@@ -14,6 +14,7 @@ from ...app.schemas import (
     StartGameRequest,
     UserInputRequest,
 )
+from .. import render
 from ..i18n import copy as i18n
 from .bot_state import BotState
 
@@ -24,6 +25,7 @@ LOGGER = logging.getLogger(__name__)
 
 _MONITOR_POLL_INTERVAL = 0.15
 _TYPING_INTERVAL = 4.0
+_HTML = "HTML"
 
 
 class GameSession:
@@ -48,6 +50,9 @@ class GameSession:
         self._pending_intended_word: str | None = None
         self._last_submission_time: float = 0.0
         self._last_processed_update_id: int | None = None
+        # Rendering state
+        self._status_msg_id: int | None = None
+        self._system_buffer: list[str] = []
 
     def start_monitor(self) -> None:
         if self._monitor_task and not self._monitor_task.done():
@@ -79,9 +84,13 @@ class GameSession:
                 await asyncio.sleep(1.0)
                 continue
 
-            for msg in snapshot.messages[self._last_sent_msg_idx:]:
-                await self._send_game_message(msg)
+            new_messages = snapshot.messages[self._last_sent_msg_idx:]
             self._last_sent_msg_idx = len(snapshot.messages)
+
+            for msg in new_messages:
+                await self._dispatch_message(msg, snapshot)
+
+            await self._flush_system_buffer()
 
             if snapshot.pendingUserInput is not None:
                 async with self.lock:
@@ -102,24 +111,45 @@ class GameSession:
                     self.last_activity = time.monotonic()
                 return
 
-    async def _send_game_message(self, msg: GameMessage) -> None:
-        lang = self.language
-        role_label = {
-            "system": i18n.get("role_system", lang),
-            "playerA": i18n.get("role_player_a", lang),
-            "playerB": i18n.get("role_player_b", lang),
-            "wordMaster": i18n.get("role_word_master", lang),
-        }.get(msg.role, msg.role)
+    async def _dispatch_message(self, msg: GameMessage, snapshot: GameState) -> None:
+        category = render.classify_event(msg)
 
-        if msg.role == "system":
-            text = msg.text
-        else:
-            text = f"[{role_label}] {msg.text}"
+        if category == "suppress":
+            return
 
+        if category == "dialogue":
+            await self._flush_system_buffer()
+            await self._send_html(render.render_dialogue(msg, self.language))
+            return
+
+        if category == "status":
+            await self._flush_system_buffer()
+            await self._send_or_edit_status(snapshot)
+            return
+
+        # "inline" or "unknown": accumulate for batching
+        self._system_buffer.append(render.render_inline_event(msg, self.language))
+
+    async def _flush_system_buffer(self) -> None:
+        if not self._system_buffer:
+            return
+        text = render.render_system_batch(self._system_buffer)
+        self._system_buffer.clear()
+        await self._send_html(text)
+
+    async def _send_or_edit_status(self, snapshot: GameState) -> None:
+        text = render.render_status(snapshot, self.language)
         try:
-            await self._bot.send_message(self.chat_id, text)
+            if self._status_msg_id is None:
+                sent = await self._bot.send_message(self.chat_id, text, parse_mode=_HTML)
+                self._status_msg_id = sent.message_id
+            else:
+                await self._bot.edit_message_text(
+                    text, self.chat_id, self._status_msg_id, parse_mode=_HTML
+                )
         except Exception as exc:
-            LOGGER.warning("Failed to send game message to chat %s: %s", self.chat_id, exc)
+            LOGGER.warning("Failed to update status message for chat %s: %s", self.chat_id, exc)
+            self._status_msg_id = None  # will re-send next time
 
     async def _send_pending_prompt(self, snapshot: GameState) -> None:
         pending = snapshot.pendingUserInput
@@ -128,51 +158,41 @@ class GameSession:
         lang = self.language
 
         if pending.kind == "wordMasterGuess":
-            text = i18n.get("wm_guess_prompt", lang, prefix=snapshot.currentPrefix)
+            text = render.render_prompt_wm_guess(snapshot, lang)
         elif pending.kind == "playerMove":
-            text = i18n.get("player_move_step1", lang, prefix=snapshot.currentPrefix)
+            text = render.render_prompt_player_move(snapshot, lang)
         else:
-            clue_text = pending.clue or ""
-            text = i18n.get(
-                "partner_guess_prompt",
-                lang,
-                clue=clue_text,
-                prefix=snapshot.currentPrefix,
-            )
+            text = render.render_prompt_partner_guess(snapshot, lang)
 
-        try:
-            await self._bot.send_message(self.chat_id, text)
-        except Exception as exc:
-            LOGGER.warning("Failed to send pending prompt to chat %s: %s", self.chat_id, exc)
+        await self._send_html(text)
 
     async def _send_game_over(self, snapshot: GameState) -> None:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         lang = self.language
-        word = snapshot.secretWord
-
-        if snapshot.winner == "players":
-            text = i18n.get("game_over_players_win", lang, word=word)
-        elif snapshot.winner == "wordMaster":
-            text = i18n.get("game_over_wm_wins", lang, word=word)
-        elif snapshot.status == "finished" and snapshot.finishReason:
-            # Error finish
-            text = i18n.get("game_over_error", lang)
-        else:
-            text = i18n.get("game_over_unknown", lang)
-
+        text = render.render_game_over(snapshot, lang)
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(i18n.get("btn_new_game", lang), callback_data="newgame")]
         ])
         try:
-            await self._bot.send_message(self.chat_id, text, reply_markup=keyboard)
+            await self._bot.send_message(
+                self.chat_id, text, parse_mode=_HTML, reply_markup=keyboard
+            )
         except Exception as exc:
             LOGGER.warning("Failed to send game over to chat %s: %s", self.chat_id, exc)
+
+    async def _send_html(self, text: str) -> None:
+        try:
+            await self._bot.send_message(self.chat_id, text, parse_mode=_HTML)
+        except Exception as exc:
+            LOGGER.warning("Failed to send message to chat %s: %s", self.chat_id, exc)
 
     async def start_game(self, request: StartGameRequest) -> None:
         await self.gm.start(request)
         async with self.lock:
             self._last_sent_msg_idx = 0
+            self._status_msg_id = None
+            self._system_buffer = []
             self.state = BotState.GAME_RUNNING
         self.start_monitor()
 

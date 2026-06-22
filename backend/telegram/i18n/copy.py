@@ -59,6 +59,18 @@ _COPY: dict[str, dict[str, str]] = {
         "lang_hint_ru": "а-я",
         "secret_word_label": "Secret word",
         "used_words_none": "(none)",
+        # Render / status message
+        "status_game_name": "Contact",
+        "status_turn": "Turn",
+        "status_prefix": "Prefix",
+        "status_used": "Used",
+        # Render / pending prompts
+        "prompt_clue_label": "Clue",
+        "prompt_wm_guess_label": "Guess the encoded word",
+        "prompt_player_move_label": "Send an encoded clue for a word starting with",
+        "prompt_partner_guess_label": "Guess the word Player B encoded",
+        # Render / game over
+        "game_over_stats": "Turns: {turns}  ·  Words used: {used}",
         "auth_required_welcome": (
             "Welcome to AI Contact Game \U0001f7e2 (beta).\n\n"
             "Access is currently restricted to invited users.\n\n"
@@ -130,6 +142,18 @@ _COPY: dict[str, dict[str, str]] = {
         "lang_hint_ru": "а-я",
         "secret_word_label": "Секретное слово",
         "used_words_none": "(нет)",
+        # Render / status message
+        "status_game_name": "Есть контакт",
+        "status_turn": "Ход",
+        "status_prefix": "Префикс",
+        "status_used": "Слова",
+        # Render / pending prompts
+        "prompt_clue_label": "Подсказка",
+        "prompt_wm_guess_label": "Угадайте зашифрованное слово",
+        "prompt_player_move_label": "Отправьте зашифрованную подсказку для слова на",
+        "prompt_partner_guess_label": "Угадайте слово Игрока B",
+        # Render / game over
+        "game_over_stats": "Ходов: {turns}  ·  Слов использовано: {used}",
         "auth_required_welcome": (
             "Добро пожаловать в AI Contact Game \U0001f7e2 (бета).\n\n"
             "Доступ ограничен приглашёнными пользователями.\n\n"
