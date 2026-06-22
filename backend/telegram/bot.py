@@ -4,9 +4,12 @@ import logging
 import sys
 
 from dotenv import load_dotenv
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, TypeHandler, filters
+from telegram import Update
 
+from .auth.store import AuthStore
 from .config import TelegramBotSettings
+from .handlers.auth import auth_gate, login_command
 from .handlers.callbacks import handle_callback
 from .handlers.commands import (
     cancel_command,
@@ -22,7 +25,9 @@ from .session.registry import SessionRegistry
 
 async def _post_init(application: Application) -> None:  # type: ignore[type-arg]
     registry: SessionRegistry = application.bot_data["registry"]
+    auth_store: AuthStore = application.bot_data["auth_store"]
     await registry.start()
+    await auth_store.load()
 
 
 async def _post_shutdown(application: Application) -> None:  # type: ignore[type-arg]
@@ -35,6 +40,7 @@ def build_application() -> Application:  # type: ignore[type-arg]
     setup_tracing(settings)
 
     registry = SessionRegistry(settings)
+    auth_store = AuthStore(settings.auth_data_path)
 
     app = (
         Application.builder()
@@ -45,7 +51,13 @@ def build_application() -> Application:  # type: ignore[type-arg]
     )
     app.bot_data["registry"] = registry
     app.bot_data["settings"] = settings
+    app.bot_data["auth_store"] = auth_store
 
+    # Group -1: authentication gate — runs before all game handlers.
+    app.add_handler(TypeHandler(Update, auth_gate), group=-1)
+
+    # Group 0: game and utility handlers.
+    app.add_handler(CommandHandler("login", login_command))
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("newgame", newgame_command))
     app.add_handler(CommandHandler("rules", rules_command))

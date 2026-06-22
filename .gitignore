@@ -16,3 +16,5 @@ __pycache__/
 *.pfx
 logs/*
 !logs/.gitkeep
+data/*
+!data/.gitkeep

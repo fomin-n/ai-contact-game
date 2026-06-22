@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 if TYPE_CHECKING:
+    from ..auth.store import AuthStore
     from ..session.registry import SessionRegistry
     from ..session.game_session import GameSession
 
@@ -16,6 +17,10 @@ def get_registry(context: ContextTypes.DEFAULT_TYPE) -> "SessionRegistry":
 
 def get_settings(context: ContextTypes.DEFAULT_TYPE):  # type: ignore[return-value]
     return context.bot_data["settings"]
+
+
+def get_auth_store(context: ContextTypes.DEFAULT_TYPE) -> "AuthStore":
+    return context.bot_data["auth_store"]  # type: ignore[return-value]
 
 
 def is_allowed_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:

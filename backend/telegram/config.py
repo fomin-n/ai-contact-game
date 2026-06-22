@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 
 class TelegramBotSettings:
@@ -13,6 +14,7 @@ class TelegramBotSettings:
         enable_phoenix_tracing: bool,
         phoenix_project_name: str,
         phoenix_collector_endpoint: str,
+        auth_data_path: Path,
     ) -> None:
         self.bot_token = bot_token
         self.session_ttl_seconds = session_ttl_seconds
@@ -21,6 +23,7 @@ class TelegramBotSettings:
         self.enable_phoenix_tracing = enable_phoenix_tracing
         self.phoenix_project_name = phoenix_project_name
         self.phoenix_collector_endpoint = phoenix_collector_endpoint
+        self.auth_data_path = auth_data_path
 
     @classmethod
     def from_env(cls) -> "TelegramBotSettings":
@@ -41,5 +44,8 @@ class TelegramBotSettings:
             phoenix_project_name=os.getenv("PHOENIX_PROJECT_NAME", "ai-contact-game-bot"),
             phoenix_collector_endpoint=os.getenv(
                 "PHOENIX_COLLECTOR_ENDPOINT", "http://127.0.0.1:6006/v1/traces"
+            ),
+            auth_data_path=Path(
+                os.getenv("AI_CONTACT_TELEGRAM_AUTH_DATA_PATH", "data/auth.json")
             ),
         )
