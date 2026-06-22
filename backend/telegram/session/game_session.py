@@ -117,6 +117,10 @@ class GameSession:
         if category == "suppress":
             return
 
+        # The human's own input is already visible as their sent message in Telegram.
+        if render.is_human_origin(msg, self.human_role):
+            return
+
         if category == "dialogue":
             await self._flush_system_buffer()
             await self._send_html(render.render_dialogue(msg, self.language))

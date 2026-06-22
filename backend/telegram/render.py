@@ -100,6 +100,16 @@ def render_inline_event(msg: "GameMessage", lang: str) -> str:  # noqa: ARG001
     return f"{emoji} {esc(msg.text)}"
 
 
+def is_human_origin(msg: "GameMessage", human_role: str) -> bool:
+    """Return True when this message echoes the human player's own submitted input.
+
+    The game appends a GameMessage for every move regardless of whether it came
+    from an LLM or from human input. Human-originated messages always carry the
+    same role as humanRole, so the role match is the only check needed.
+    """
+    return human_role not in ("", "none") and msg.role == human_role
+
+
 def render_system_batch(lines: list[str]) -> str:
     """Combine multiple inline event lines into one Telegram message."""
     return "\n".join(lines)

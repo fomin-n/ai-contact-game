@@ -392,5 +392,53 @@ class TestRenderGameOver(unittest.TestCase):
         self.assertIn("4", result)
 
 
+# ---------------------------------------------------------------------------
+# is_human_origin()
+# ---------------------------------------------------------------------------
+
+class TestIsHumanOrigin(unittest.TestCase):
+    def test_playerA_clue_suppressed_when_human_is_playerA(self):
+        msg = _msg(role="playerA", event_type="clue")
+        self.assertTrue(render.is_human_origin(msg, "playerA"))
+
+    def test_playerA_intended_word_suppressed_when_human_is_playerA(self):
+        msg = _msg(role="playerA", event_type="intended-word")
+        self.assertTrue(render.is_human_origin(msg, "playerA"))
+
+    def test_playerA_partner_guess_suppressed_when_human_is_playerA(self):
+        msg = _msg(role="playerA", event_type="partner-guess")
+        self.assertTrue(render.is_human_origin(msg, "playerA"))
+
+    def test_wm_guess_suppressed_when_human_is_wordMaster(self):
+        msg = _msg(role="wordMaster", event_type="master-guess")
+        self.assertTrue(render.is_human_origin(msg, "wordMaster"))
+
+    def test_playerB_clue_shown_when_human_is_playerA(self):
+        msg = _msg(role="playerB", event_type="clue")
+        self.assertFalse(render.is_human_origin(msg, "playerA"))
+
+    def test_playerA_clue_shown_when_human_is_wordMaster(self):
+        msg = _msg(role="playerA", event_type="clue")
+        self.assertFalse(render.is_human_origin(msg, "wordMaster"))
+
+    def test_wm_guess_shown_when_human_is_playerA(self):
+        msg = _msg(role="wordMaster", event_type="master-guess")
+        self.assertFalse(render.is_human_origin(msg, "playerA"))
+
+    def test_nothing_suppressed_in_ai_vs_ai(self):
+        for role in ("playerA", "playerB", "wordMaster", "system"):
+            msg = _msg(role=role)
+            self.assertFalse(render.is_human_origin(msg, "none"))
+
+    def test_empty_human_role_suppresses_nothing(self):
+        msg = _msg(role="playerA")
+        self.assertFalse(render.is_human_origin(msg, ""))
+
+    def test_playerB_intended_word_shown_when_human_is_playerA(self):
+        # AI player's intended word is informative — must remain visible
+        msg = _msg(role="playerB", event_type="intended-word")
+        self.assertFalse(render.is_human_origin(msg, "playerA"))
+
+
 if __name__ == "__main__":
     unittest.main()
