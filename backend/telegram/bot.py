@@ -4,8 +4,7 @@ import logging
 import sys
 
 from dotenv import load_dotenv
-from telegram import Application
-from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from .config import TelegramBotSettings
 from .handlers.callbacks import handle_callback
