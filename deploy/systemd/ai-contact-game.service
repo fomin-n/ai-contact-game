@@ -1,0 +1,18 @@
+[Unit]
+Description=AI Contact Game Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=glados
+WorkingDirectory=/opt/ai-contact-game
+EnvironmentFile=/opt/ai-contact-game/.env
+ExecStart=/opt/ai-contact-game/.venv/bin/python -m backend.telegram.bot
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

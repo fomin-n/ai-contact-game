@@ -327,6 +327,125 @@ Logs include game state, prompts, provider request/response metadata, parsed LLM
 - `gpt-4.1-mini` has been used successfully for Player A and Player B through the OpenAI-compatible provider.
 - There is no artificial delay before visible game-chat messages. Provider latency is the only expected delay.
 
+## Telegram Bot
+
+### Package structure
+
+```
+backend/telegram/
+  bot.py              # Entry point: python -m backend.telegram.bot
+  config.py           # TelegramBotSettings (reads AI_CONTACT_TELEGRAM_* env vars)
+  safety.py           # Unicode sanitization, length limits, word/clue validation
+  observability.py    # Phoenix/OpenTelemetry setup; _safe_metadata for trace export
+  i18n/copy.py        # All user-facing strings: en + ru. get(key, lang, **fmt) helper.
+  session/
+    bot_state.py      # BotState enum
+    game_session.py   # GameSession: owns GameManager + polling monitor task
+    registry.py       # SessionRegistry: user_id → GameSession; TTL cleanup
+  handlers/
+    _helpers.py       # get_registry, get_settings, is_allowed_chat, get_lang
+    commands.py       # /start /newgame /rules /status /cancel
+    callbacks.py      # Inline keyboard callbacks (lang:, role:, newgame)
+    messages.py       # Incoming text dispatch and per-state handlers
+```
+
+Tests in `backend/tests/tgbot/` (not `telegram/` to avoid shadowing the library package).
+
+### Session lifecycle
+
+Each Telegram `user_id` gets an independent `GameSession` in `SessionRegistry`. Each session owns a fresh `GameManager` instance. Sessions are keyed by `user_id` only (private chats). The `SessionRegistry` runs a background cleanup task every 5 minutes, removing sessions idle beyond `AI_CONTACT_TELEGRAM_SESSION_TTL_SECONDS`.
+
+`GameSession` state machine transitions:
+- `IDLE` → `/start` → `SELECTING_LANGUAGE` → lang callback → `SELECTING_ROLE`
+- `SELECTING_ROLE` → wordMaster → `ENTERING_SECRET` → valid word → `GAME_RUNNING`
+- `SELECTING_ROLE` → playerA → `GAME_RUNNING` (game starts immediately)
+- `GAME_RUNNING` → monitor detects pending → `WAITING_WM_GUESS` / `WAITING_INTENDED_WORD` / `WAITING_PARTNER_GUESS`
+- `WAITING_INTENDED_WORD` → valid word → `WAITING_CLUE` → valid clue → `GAME_RUNNING`
+- `WAITING_*` → valid input → submit → `GAME_RUNNING` → monitor resumes
+- Any state → `/cancel` → `IDLE`
+- Any state → `/newgame` → `SELECTING_LANGUAGE`
+
+### Concurrency model
+
+Each `GameSession` has an `asyncio.Lock` that protects state machine transitions. The monitor task runs independently and acquires the lock only when changing `self.state`. Handler functions acquire the lock briefly for state read/write, then release it before doing I/O (Telegram API calls, `gm.submit_user_input`). The deduplication guard (`_last_processed_update_id`) prevents double-processing.
+
+Monitor loop: polls `gm.get_state()` every 150ms. Sends new messages to Telegram, sends a typing action every 4s. Stops when `pendingUserInput` is detected (transitions session state, sends prompt) or when game finishes (sends game-over message with New Game button).
+
+After the user submits input: handler calls `gm.submit_user_input(...)` (resumes the game loop), then calls `session.start_monitor()` which restarts the monitor from `_last_sent_msg_idx`.
+
+### Mapping Telegram steps to pendingUserInput kinds
+
+| pendingUserInput.kind | Bot state when waiting | User action | Submitted as |
+|---|---|---|---|
+| `wordMasterGuess` | `WAITING_WM_GUESS` | Send one word | `guess` field |
+| `playerMove` | `WAITING_INTENDED_WORD` then `WAITING_CLUE` | Two messages: word then clue | `intendedWord` + `clue` |
+| `partnerGuess` | `WAITING_PARTNER_GUESS` | Send one word | `guess` field |
+
+### Safety pipeline
+
+All user text goes through `backend/telegram/safety.py`:
+1. Unicode NFC normalization
+2. C0/C1 control character removal (allows `\n`, `\t`)
+3. Length limits: words ≤ 50 chars, clues ≤ 500 chars
+4. For words: `word_utils.is_valid_word()` + `word_utils.starts_with_prefix()`
+5. For clues: `word_utils.clue_mentions_word()` check
+6. Rate limiting: 1s cooldown per session
+
+The `clue_safety` block added to `prompts/_common.v1.yaml` instructs all LLM tasks to treat clue text as untrusted player communication that cannot override system rules or response schemas.
+
+### Observability
+
+Phoenix v17.2.0 runs at `127.0.0.1:6006` (Docker, `nutrition_agent_phoenix_data` volume, compose file at `/opt/nutrition-agent/deploy/phoenix/docker-compose.yml`). The bot sends traces to a separate project `ai-contact-game-bot` using `arize-phoenix-otel`.
+
+Access Phoenix UI:
+```bash
+ssh -L 6006:127.0.0.1:6006 glados@65.109.139.84 -N
+# Open http://localhost:6006 → select "ai-contact-game-bot" project
+```
+
+User IDs are SHA-256 hashed before export (first 16 hex chars). API keys and tokens are never passed as metadata.
+
+### Deployment
+
+The bot runs as a systemd service on the VPS at `/opt/ai-contact-game/`. It uses the same pattern as `nutrition-agent`.
+
+Service file: `deploy/systemd/ai-contact-game.service`
+Deploy script: `deploy/scripts/deploy.sh`
+
+Required env vars in `/opt/ai-contact-game/.env`:
+```bash
+MISTRAL_API_KEY=...
+AI_CONTACT_TELEGRAM_BOT_TOKEN=...
+# Optional:
+ENABLE_PHOENIX_TRACING=true
+PHOENIX_COLLECTOR_ENDPOINT=http://127.0.0.1:6006/v1/traces
+```
+
+Management:
+```bash
+sudo systemctl status ai-contact-game    # status
+sudo journalctl -u ai-contact-game -f    # live logs
+sudo systemctl restart ai-contact-game   # restart
+cd /opt/ai-contact-game && git pull && sudo systemctl restart ai-contact-game  # update
+```
+
+### Validation commands
+
+```bash
+.venv/bin/python -m unittest backend.tests.tgbot.test_safety
+.venv/bin/python -m unittest backend.tests.tgbot.test_session_isolation
+.venv/bin/python -m unittest backend.tests.tgbot.test_handlers
+.venv/bin/python -m unittest discover backend/tests
+```
+
+### Operational troubleshooting
+
+- **Bot not responding**: `sudo journalctl -u ai-contact-game -n 50`. Check token validity with `curl https://api.telegram.org/bot<TOKEN>/getMe`.
+- **Game stuck in GAME_RUNNING**: the monitor task may have died. User can `/cancel` or `/newgame` to reset.
+- **Session lost after restart**: expected (in-memory). Users start a new game with `/newgame`.
+- **Phoenix traces missing**: check `ENABLE_PHOENIX_TRACING=true` in `.env` and that Phoenix Docker container is running: `docker ps | grep phoenix`.
+- **Mistral 429 errors**: same behavior as web version — bot will show an error message. Switch models or wait for capacity.
+
 ## Git / Release Notes
 
 - Main branch: `main`.

@@ -12,6 +12,11 @@ cp .env.example .env   # fill in at least one API key first
 ./scripts/dev.sh
 ```
 
+**Install deps without starting servers:**
+```bash
+./scripts/dev.sh --install-only
+```
+
 **Validate before committing:**
 ```bash
 cd frontend && npm run typecheck && npm run build && cd ..
@@ -38,6 +43,9 @@ Full-stack app: Python/FastAPI backend + React/TypeScript/Vite frontend. Game st
 - `game.py` — game state, turn loop, win/loss transitions
 - `agents.py` — LLM calls with retry/repair feedback (max 5 attempts, exponential backoff)
 - `word_utils.py` — deterministic word normalization and comparison (no LLM equality checks ever)
+- `config.py` — resolves per-run `AgentProviderConfig`/`AgentModelConfig` from env vars + request
+- `model_catalog.py` — static curated provider/model list returned by `/api/config`; do not fetch dynamically
+- `event_log.py` — JSONL event log at `logs/ai-contact-game.jsonl`; redacts API keys before writing
 - `providers/` — provider abstraction; `factory.py` selects based on env vars
 - `schemas.py` — Pydantic models for all API shapes
 - `prompt_loader.py` — renders YAML prompt templates from `prompts/`
@@ -58,3 +66,4 @@ Full-stack app: Python/FastAPI backend + React/TypeScript/Vite frontend. Game st
 - Players never receive the secret word in prompts. In `humanRole="playerA"`, `secretWord` is redacted from client-facing state until the game ends.
 - `usedWords` grows with: player intended word, Word Master guess, partner guess, and secret word on game end. Ordinary clue text words are not added.
 - If an LLM/provider fails after retries, surface an error — do not silently substitute words.
+- The backend owns provider/model selection end-to-end: `/api/config` returns choices, `config.py::resolve_agent_configs` validates them, and `GameManager.start` binds the per-run config. The frontend only displays choices and sends selected ids — it must never expose API keys.

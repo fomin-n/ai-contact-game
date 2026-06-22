@@ -88,6 +88,64 @@ cd ..
 .venv/bin/python -m compileall backend
 ```
 
+## Telegram Bot
+
+A Telegram bot interface is included that shares the same game engine. Users can play in Russian or English as Word Master or Player A, against AI opponents.
+
+### Supported modes
+
+- **Play as Word Master**: enter a secret word, see AI players produce clues, try to intercept them.
+- **Play as a Player**: give encrypted clues on your turn; guess Player B's encoded word when contact is attempted.
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `/start` or `/newgame` | Start a new game (language + role selection) |
+| `/rules` | Show the game rules |
+| `/status` | Show current game state |
+| `/cancel` | Cancel the active game |
+
+### Local run
+
+Add to `.env`:
+```bash
+AI_CONTACT_TELEGRAM_BOT_TOKEN=your_bot_token
+```
+
+Run the bot:
+```bash
+.venv/bin/python -m backend.telegram.bot
+```
+
+### Deployment
+
+The bot runs as a systemd service on the VPS:
+```bash
+./deploy/scripts/deploy.sh
+```
+
+Service management:
+```bash
+sudo systemctl status ai-contact-game
+sudo journalctl -u ai-contact-game -f
+sudo systemctl restart ai-contact-game
+```
+
+### Observability
+
+Traces are sent to Arize Phoenix when `ENABLE_PHOENIX_TRACING=true`. Access the Phoenix UI via SSH port forwarding:
+```bash
+ssh -L 6006:127.0.0.1:6006 glados@65.109.139.84 -N
+```
+Then open `http://localhost:6006` and select the `ai-contact-game-bot` project.
+
+### MVP limitations
+
+- In-memory sessions: active games are lost on service restart (users can `/newgame`).
+- Private chats only.
+- Model and provider configuration is server-side only (no per-user selection).
+
 ## Notes
 
 - Do not commit `.env*`, runtime logs, `.venv`, `node_modules`, or `dist`.
