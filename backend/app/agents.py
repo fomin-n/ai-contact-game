@@ -6,6 +6,9 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from opentelemetry import trace as _otel_trace
+from opentelemetry.trace import Status as _OtelStatus, StatusCode as _OtelStatusCode
+
 import httpx
 from pydantic import BaseModel
 
@@ -168,6 +171,13 @@ def _log_validation_failure(
     )
 
 
+def _llm_event(span: Any, name: str, attrs: dict[str, Any]) -> None:
+    try:
+        span.add_event(name, attrs)
+    except Exception:
+        pass
+
+
 async def _with_repair(
     *,
     provider: LLMProvider,
@@ -183,12 +193,22 @@ async def _with_repair(
             f"{provider.display_name} API key is not configured. Set {key_name} and restart the backend."
         )
 
-    last_error = "Unknown LLM error."
-    repair_feedback = ""
-    api_failed = False
-    validation_failed = False
-    rejected_answer_signatures: set[str] = set()
-    for attempt in range(MAX_LLM_ATTEMPTS):
+    _tracer = _otel_trace.get_tracer("ai-contact-game")
+    _slug = task_name.lower().replace(" ", "_").replace(".", "")[:50]
+    with _tracer.start_as_current_span(f"llm.{_slug}") as _span:
+      try:
+        _span.set_attribute("llm.task_name", task_name)
+        _span.set_attribute("llm.provider", provider.name)
+        _span.set_attribute("llm.model", model)
+      except Exception:
+        pass
+
+      last_error = "Unknown LLM error."
+      repair_feedback = ""
+      api_failed = False
+      validation_failed = False
+      rejected_answer_signatures: set[str] = set()
+      for attempt in range(MAX_LLM_ATTEMPTS):
         prompt = build_prompt(attempt, repair_feedback if validation_failed else "")
         _log_prompt_call(
             task_name=task_name,
@@ -249,6 +269,7 @@ async def _with_repair(
                     reason=last_error,
                 )
                 await asyncio.sleep(retry_delay)
+            _llm_event(_span, "llm.api_error", {"attempt": attempt + 1, "error": last_error[:200]})
             continue
         except (MissingApiKeyError, ValueError, KeyError, TypeError, httpx.HTTPError) as error:
             api_failed = True
@@ -287,6 +308,7 @@ async def _with_repair(
                 reason=last_error,
                 event_type="llm_api_retry_scheduled",
             )
+            _llm_event(_span, "llm.api_error", {"attempt": attempt + 1, "error": last_error[:200]})
             continue
 
         write_event(
@@ -322,6 +344,11 @@ async def _with_repair(
                 attemptNumber=attempt + 1,
                 value=value,
             )
+            try:
+                _span.set_attribute("llm.total_attempts", attempt + 1)
+                _span.set_attribute("llm.success", True)
+            except Exception:
+                pass
             return value
 
         validation_failed = True
@@ -346,10 +373,17 @@ async def _with_repair(
             reason=last_error,
             event_type="llm_validation_retry_scheduled",
         )
+        _llm_event(_span, "llm.validation_retry", {"attempt": attempt + 1, "reason": last_error[:200]})
 
-    if validation_failed and not api_failed:
+      try:
+        _span.set_attribute("llm.success", False)
+        _span.set_attribute("llm.total_attempts", MAX_LLM_ATTEMPTS)
+        _span.set_status(_OtelStatus(_OtelStatusCode.ERROR, last_error[:200]))
+      except Exception:
+        pass
+      if validation_failed and not api_failed:
         raise LLMValidationError(f"{task_name} failed validation after retries. {last_error}")
-    raise LLMGameError(f"{task_name} failed after retries. {last_error}")
+      raise LLMGameError(f"{task_name} failed after retries. {last_error}")
 
 
 def validate_player_move_output(

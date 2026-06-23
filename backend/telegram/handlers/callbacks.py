@@ -6,6 +6,7 @@ from telegram import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, 
 from telegram.ext import ContextTypes
 
 from ...app.schemas import StartGameRequest
+from .. import observability
 from ..i18n import copy as i18n
 from ..session.bot_state import BotState
 from ._helpers import get_or_create_session, is_allowed_chat
@@ -33,16 +34,29 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     session = await get_or_create_session(user.id, chat.id, context)
 
     if data.startswith("lang:"):
-        await _handle_language(query, session, data[5:])
+        op = "callback.lang_select"
     elif data.startswith("role:"):
-        await _handle_role(query, session, data[5:], context)
+        op = "callback.role_select"
     elif data == "newgame":
-        await _handle_newgame(query, session)
+        op = "callback.newgame"
     else:
-        LOGGER.warning("Unknown callback data: %s", data)
+        op = "callback.unknown"
+
+    async with observability.span_for_update(op, update, session=session) as span:
+        observability._attrs(span, {"tg.callback.data": data[:80]})
+
+        if data.startswith("lang:"):
+            await _handle_language(query, session, data[5:], span)
+        elif data.startswith("role:"):
+            await _handle_role(query, session, data[5:], context, span)
+        elif data == "newgame":
+            await _handle_newgame(query, session)
+        else:
+            LOGGER.warning("Unknown callback data: %s", data)
+            observability._event(span, "callback.unknown", {"data": data[:80]})
 
 
-async def _handle_language(query: CallbackQuery, session, lang_code: str) -> None:
+async def _handle_language(query: CallbackQuery, session, lang_code: str, span=None) -> None:
     if lang_code not in ("en", "ru"):
         return
     async with session.lock:
@@ -50,6 +64,8 @@ async def _handle_language(query: CallbackQuery, session, lang_code: str) -> Non
             return
         session.language = lang_code  # type: ignore[assignment]
         session.state = BotState.SELECTING_ROLE
+
+    observability._attrs(span, {"game.language_selected": lang_code})
 
     keyboard = InlineKeyboardMarkup([
         [
@@ -74,6 +90,7 @@ async def _handle_role(
     session,
     role: str,
     context: ContextTypes.DEFAULT_TYPE,
+    span=None,
 ) -> None:
     lang = session.language
     async with session.lock:
@@ -87,6 +104,8 @@ async def _handle_role(
         else:
             session.state = BotState.GAME_RUNNING
 
+    observability._attrs(span, {"game.role_selected": role})
+
     if role == "wordMaster":
         await query.edit_message_text(i18n.get("enter_secret", lang))
     else:
@@ -99,11 +118,16 @@ async def _handle_role(
         )
         try:
             await session.start_game(request)
+            observability._event(span, "game.started", {
+                "language": lang,
+                "human_role": "playerA",
+            })
         except Exception as exc:
             LOGGER.error("Failed to start game for user %s: %s", session.user_id, exc)
             async with session.lock:
                 session.state = BotState.IDLE
             await context.bot.send_message(session.chat_id, i18n.get("generic_error", lang))
+            observability._event(span, "game.start_failed", {"error": str(exc)[:200]})
 
 
 async def _handle_newgame(query: CallbackQuery, session) -> None:

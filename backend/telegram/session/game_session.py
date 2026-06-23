@@ -14,7 +14,7 @@ from ...app.schemas import (
     StartGameRequest,
     UserInputRequest,
 )
-from .. import render
+from .. import observability, render
 from ..i18n import copy as i18n
 from .bot_state import BotState
 
@@ -188,16 +188,31 @@ class GameSession:
     async def _send_html(self, text: str) -> None:
         try:
             await self._bot.send_message(self.chat_id, text, parse_mode=_HTML)
+            LOGGER.debug("sent message to chat %s (%d chars)", self.chat_id, len(text))
         except Exception as exc:
             LOGGER.warning("Failed to send message to chat %s: %s", self.chat_id, exc)
 
     async def start_game(self, request: StartGameRequest) -> None:
-        await self.gm.start(request)
-        async with self.lock:
-            self._last_sent_msg_idx = 0
-            self._status_msg_id = None
-            self._system_buffer = []
-            self.state = BotState.GAME_RUNNING
+        with observability.span_for_game_session(
+            "start",
+            self.user_id,
+            language=request.language,
+            human_role=str(request.humanRole),
+        ) as span:
+            observability._attrs(span, {
+                "game.language": request.language,
+                "game.human_role": str(request.humanRole),
+            })
+            await self.gm.start(request)
+            async with self.lock:
+                self._last_sent_msg_idx = 0
+                self._status_msg_id = None
+                self._system_buffer = []
+                self.state = BotState.GAME_RUNNING
+            observability._event(span, "game.started", {
+                "language": request.language,
+                "human_role": str(request.humanRole),
+            })
         self.start_monitor()
 
     async def submit_input(self, request: UserInputRequest) -> None:

@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
 from ..auth.store import AuthStore
+from .. import observability
 from ..i18n import copy as i18n
 from ._helpers import get_auth_store, is_allowed_chat
 
@@ -39,10 +40,10 @@ async def auth_gate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return  # let login_command in group 0 handle it
 
     if first_word == "/start":
-        # Detect language hint from Telegram client locale
         lang = _guess_lang(update)
         if message:
             await message.reply_text(i18n.get("auth_required_welcome", lang))
+        LOGGER.info("auth_gate: blocked /start for user %s", user.id)
         raise ApplicationHandlerStop
 
     # Callback query from an inline button (e.g. "New game" from an old session)
@@ -51,12 +52,14 @@ async def auth_gate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.callback_query.answer(
             i18n.get("auth_required_brief", lang), show_alert=True
         )
+        LOGGER.info("auth_gate: blocked callback for user %s", user.id)
         raise ApplicationHandlerStop
 
     # Any other message or command
     lang = _guess_lang(update)
     if message:
         await message.reply_text(i18n.get("auth_required_brief", lang))
+    LOGGER.info("auth_gate: blocked message for user %s", user.id)
     raise ApplicationHandlerStop
 
 
@@ -71,24 +74,26 @@ async def login_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not user:
         return
 
-    # Best-effort language detection (user may not have a session yet)
-    lang = _guess_lang(update)
+    async with observability.span_for_update("command.login", update) as span:
+        lang = _guess_lang(update)
 
-    raw_code = " ".join(context.args or []).strip()
-    if not raw_code:
-        await update.message.reply_text(i18n.get("login_usage", lang))
-        return
+        raw_code = " ".join(context.args or []).strip()
+        if not raw_code:
+            await update.message.reply_text(i18n.get("login_usage", lang))
+            observability.record_auth_outcome(span, "missing_code")
+            return
 
-    auth_store = get_auth_store(context)
-    outcome = await auth_store.redeem_code(raw_code, user.id)
+        auth_store = get_auth_store(context)
+        outcome = await auth_store.redeem_code(raw_code, user.id)
+        observability.record_auth_outcome(span, outcome)
 
-    if outcome == "ok":
-        await update.message.reply_text(i18n.get("login_success", lang))
-    elif outcome == "already_authorized":
-        await update.message.reply_text(i18n.get("login_already_authorized", lang))
-    else:
-        # "invalid" or "already_used" — same message to avoid oracle attacks
-        await update.message.reply_text(i18n.get("login_invalid", lang))
+        if outcome == "ok":
+            await update.message.reply_text(i18n.get("login_success", lang))
+        elif outcome == "already_authorized":
+            await update.message.reply_text(i18n.get("login_already_authorized", lang))
+        else:
+            # "invalid" or "already_used" — same message to avoid oracle attacks
+            await update.message.reply_text(i18n.get("login_invalid", lang))
 
 
 def _guess_lang(update: Update) -> str:
