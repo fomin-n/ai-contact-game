@@ -359,11 +359,33 @@ Each Telegram `user_id` gets an independent `GameSession` in `SessionRegistry`. 
 - `IDLE` → `/start` → `SELECTING_LANGUAGE` → lang callback → `SELECTING_ROLE`
 - `SELECTING_ROLE` → wordMaster → `ENTERING_SECRET` → valid word → `GAME_RUNNING`
 - `SELECTING_ROLE` → playerA → `GAME_RUNNING` (game starts immediately)
+- `SELECTING_ROLE` → none ("Let LLMs play" / spectator) → `GAME_RUNNING` (game starts immediately, no pendingUserInput ever)
 - `GAME_RUNNING` → monitor detects pending → `WAITING_WM_GUESS` / `WAITING_INTENDED_WORD` / `WAITING_PARTNER_GUESS`
 - `WAITING_INTENDED_WORD` → valid word → `WAITING_CLUE` → valid clue → `GAME_RUNNING`
 - `WAITING_*` → valid input → submit → `GAME_RUNNING` → monitor resumes
 - Any state → `/cancel` → `IDLE`
 - Any state → `/newgame` → `SELECTING_LANGUAGE`
+
+### Spectator mode ("Let LLMs play" / "Пусть LLM играют сами")
+
+The third role-selection button starts a game with `humanRole="none"` — the same
+mode the web app calls "AI vs AI" (see `## Human Modes` above). No backend
+changes were needed: the engine never sets `pendingUserInput` for `"none"`,
+never redacts `secretWord`, and the Word-Master-guess-failure path
+(`master-no-guess` → falls through to `failed-intercept`, game continues) was
+already in place. The bot's `render.is_human_origin()` already returns `False`
+for `human_role="none"`, so every message (clue, guess, prefix reveal, secret
+word reveal) is dispatched — nothing extra to suppress or reformat.
+
+The only bot-side addition is delivery pacing: `GameSession._monitor_loop`
+sleeps `settings.ai_spectator_message_delay_seconds` between dispatching each
+new message when `human_role == "none"`, so a turn's burst of messages (clue,
+guess, contact result, prefix update) trickles in readably instead of landing
+in one burst per 150ms poll tick. This does not change the engine's LLM call
+cadence — that remains provider-latency-paced only, consistent with the "no
+artificial delay before visible game-chat messages" rule above, which still
+holds for the *engine*; the delay is purely a Telegram message-delivery
+courtesy for spectators.
 
 ### Concurrency model
 
@@ -419,6 +441,7 @@ AI_CONTACT_TELEGRAM_BOT_TOKEN=...
 # Optional:
 ENABLE_PHOENIX_TRACING=true
 PHOENIX_COLLECTOR_ENDPOINT=http://127.0.0.1:6006/v1/traces
+AI_CONTACT_TELEGRAM_AI_SPECTATOR_MESSAGE_DELAY_SECONDS=1.5  # pacing for "Let LLMs play" mode
 ```
 
 Management:

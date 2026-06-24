@@ -71,7 +71,8 @@ def _make_session(user_id=1, chat_id=100, state=BotState.IDLE, language="en"):
     bot = MagicMock()
     bot.send_message = AsyncMock()
     bot.send_chat_action = AsyncMock()
-    session = GameSession(user_id=user_id, chat_id=chat_id, gm=gm, bot=bot)
+    settings = MagicMock(ai_spectator_message_delay_seconds=0.0)
+    session = GameSession(user_id=user_id, chat_id=chat_id, gm=gm, bot=bot, settings=settings)
     session.state = state
     session.language = language
     return session
@@ -136,6 +137,76 @@ class TestLanguageAndRoleSelection(unittest.IsolatedAsyncioTestCase):
             await _handle_role(query, session, "playerA", context)
 
         mock_start.assert_awaited_once()
+        req = mock_start.call_args[0][0]
+        self.assertEqual(req.humanRole, "playerA")
+
+    async def test_role_none_starts_spectator_game(self):
+        from backend.telegram.handlers.callbacks import _handle_role
+
+        session = _make_session(state=BotState.SELECTING_ROLE)
+        session.language = "en"
+        query = MagicMock()
+        query.edit_message_text = AsyncMock()
+        context = MagicMock()
+        context.bot = MagicMock()
+
+        mock_start = AsyncMock()
+        with patch.object(session, "start_game", new=mock_start):
+            await _handle_role(query, session, "none", context)
+
+        self.assertEqual(session.state, BotState.GAME_RUNNING)
+        self.assertEqual(session.human_role, "none")
+        mock_start.assert_awaited_once()
+        req = mock_start.call_args[0][0]
+        self.assertEqual(req.humanRole, "none")
+        # Spectator-specific copy, not the generic "game_started" string
+        query.edit_message_text.assert_awaited_once()
+        text = query.edit_message_text.call_args[0][0]
+        self.assertIn(i18n.get("spectator_game_started", "en"), text)
+
+    async def test_role_none_ru_uses_localized_spectator_copy(self):
+        from backend.telegram.handlers.callbacks import _handle_role
+
+        session = _make_session(state=BotState.SELECTING_ROLE, language="ru")
+        query = MagicMock()
+        query.edit_message_text = AsyncMock()
+        context = MagicMock()
+        context.bot = MagicMock()
+
+        mock_start = AsyncMock()
+        with patch.object(session, "start_game", new=mock_start):
+            await _handle_role(query, session, "none", context)
+
+        text = query.edit_message_text.call_args[0][0]
+        self.assertIn(i18n.get("spectator_game_started", "ru"), text)
+
+    async def test_role_keyboard_includes_ai_vs_ai_button(self):
+        from backend.telegram.handlers.callbacks import _handle_language
+
+        session = _make_session(state=BotState.SELECTING_LANGUAGE)
+        query = MagicMock()
+        query.edit_message_text = AsyncMock()
+
+        await _handle_language(query, session, "en")
+
+        keyboard = query.edit_message_text.call_args.kwargs["reply_markup"]
+        callback_data = [
+            button.callback_data for row in keyboard.inline_keyboard for button in row
+        ]
+        self.assertIn("role:none", callback_data)
+
+    async def test_unknown_role_rejected(self):
+        from backend.telegram.handlers.callbacks import _handle_role
+
+        session = _make_session(state=BotState.SELECTING_ROLE)
+        query = MagicMock()
+        query.edit_message_text = AsyncMock()
+        context = MagicMock()
+
+        await _handle_role(query, session, "bogus", context)
+
+        self.assertEqual(session.state, BotState.SELECTING_ROLE)
+        query.edit_message_text.assert_not_awaited()
 
 
 class TestSecretWordEntry(unittest.IsolatedAsyncioTestCase):
@@ -335,6 +406,60 @@ class TestPrivateChatOnly(unittest.IsolatedAsyncioTestCase):
         text = update.message.reply_text.call_args[0][0]
         self.assertIn(i18n.get("private_only"), text)
         self.assertIn("[System]", text)
+
+
+class TestSpectatorMessagePacing(unittest.IsolatedAsyncioTestCase):
+    async def test_delay_applied_between_messages_in_spectator_mode(self):
+        from backend.app.schemas import GameMessage
+        from backend.telegram.session.game_session import GameSession
+
+        gm = MagicMock()
+        messages = [
+            GameMessage(id="1", role="playerA", text="clue one", timestamp=0.0,
+                        metadata={"eventType": "clue"}),
+            GameMessage(id="2", role="playerB", text="clue two", timestamp=0.0,
+                        metadata={"eventType": "clue"}),
+        ]
+        gm.get_state = AsyncMock(
+            return_value=_make_game_state(status="finished", winner="players", messages=messages)
+        )
+        bot = MagicMock()
+        bot.send_message = AsyncMock()
+        bot.send_chat_action = AsyncMock()
+        settings = MagicMock(ai_spectator_message_delay_seconds=2.5)
+        session = GameSession(user_id=1, chat_id=1, gm=gm, bot=bot, settings=settings)
+        session.human_role = "none"
+
+        with patch("backend.telegram.session.game_session.asyncio.sleep", new=AsyncMock()) as mock_sleep:
+            await session._monitor_loop()
+
+        delay_calls = [call.args[0] for call in mock_sleep.call_args_list if call.args[0] == 2.5]
+        self.assertEqual(len(delay_calls), len(messages))
+
+    async def test_no_delay_for_non_spectator_session(self):
+        from backend.app.schemas import GameMessage
+        from backend.telegram.session.game_session import GameSession
+
+        gm = MagicMock()
+        messages = [
+            GameMessage(id="1", role="playerA", text="clue one", timestamp=0.0,
+                        metadata={"eventType": "clue"}),
+        ]
+        gm.get_state = AsyncMock(
+            return_value=_make_game_state(status="finished", winner="players", messages=messages)
+        )
+        bot = MagicMock()
+        bot.send_message = AsyncMock()
+        bot.send_chat_action = AsyncMock()
+        settings = MagicMock(ai_spectator_message_delay_seconds=2.5)
+        session = GameSession(user_id=1, chat_id=1, gm=gm, bot=bot, settings=settings)
+        session.human_role = "playerA"
+
+        with patch("backend.telegram.session.game_session.asyncio.sleep", new=AsyncMock()) as mock_sleep:
+            await session._monitor_loop()
+
+        delay_calls = [call.args[0] for call in mock_sleep.call_args_list if call.args[0] == 2.5]
+        self.assertEqual(len(delay_calls), 0)
 
 
 class TestSystemMessageHelpers(unittest.IsolatedAsyncioTestCase):

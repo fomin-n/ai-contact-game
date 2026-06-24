@@ -46,7 +46,7 @@ class SessionRegistry:
                 session.last_activity = time.monotonic()
                 return session
             gm = GameManager(self._providers, self._models)
-            session = GameSession(user_id, chat_id, gm, bot)
+            session = GameSession(user_id, chat_id, gm, bot, self._settings)
             self._sessions[user_id] = session
             LOGGER.info("Created new session for user %s", user_id)
             return session

@@ -77,7 +77,13 @@ async def _handle_language(query: CallbackQuery, session, lang_code: str, span=N
                 i18n.get("btn_player_a", lang_code),
                 callback_data="role:playerA",
             ),
-        ]
+        ],
+        [
+            InlineKeyboardButton(
+                i18n.get("btn_ai_vs_ai", lang_code),
+                callback_data="role:none",
+            ),
+        ],
     ])
     await edit_system(query, i18n.get("select_role", lang_code), lang_code, reply_markup=keyboard)
 
@@ -93,7 +99,7 @@ async def _handle_role(
     async with session.lock:
         if session.state != BotState.SELECTING_ROLE:
             return
-        if role not in ("wordMaster", "playerA"):
+        if role not in ("wordMaster", "playerA", "none"):
             return
         session.human_role = role  # type: ignore[assignment]
         if role == "wordMaster":
@@ -105,26 +111,28 @@ async def _handle_role(
 
     if role == "wordMaster":
         await edit_system(query, i18n.get("enter_secret", lang), lang)
-    else:
-        await edit_system(query, i18n.get("game_started", lang), lang)
-        request = StartGameRequest(
-            language=lang,
-            playerAPersonality="",
-            playerBPersonality="",
-            humanRole="playerA",
-        )
-        try:
-            await session.start_game(request)
-            observability._event(span, "game.started", {
-                "language": lang,
-                "human_role": "playerA",
-            })
-        except Exception as exc:
-            LOGGER.error("Failed to start game for user %s: %s", session.user_id, exc)
-            async with session.lock:
-                session.state = BotState.IDLE
-            await send_system(context.bot, session.chat_id, i18n.get("generic_error", lang), lang)
-            observability._event(span, "game.start_failed", {"error": str(exc)[:200]})
+        return
+
+    started_copy_key = "spectator_game_started" if role == "none" else "game_started"
+    await edit_system(query, i18n.get(started_copy_key, lang), lang)
+    request = StartGameRequest(
+        language=lang,
+        playerAPersonality="",
+        playerBPersonality="",
+        humanRole=role,  # type: ignore[arg-type]
+    )
+    try:
+        await session.start_game(request)
+        observability._event(span, "game.started", {
+            "language": lang,
+            "human_role": role,
+        })
+    except Exception as exc:
+        LOGGER.error("Failed to start game for user %s: %s", session.user_id, exc)
+        async with session.lock:
+            session.state = BotState.IDLE
+        await send_system(context.bot, session.chat_id, i18n.get("generic_error", lang), lang)
+        observability._event(span, "game.start_failed", {"error": str(exc)[:200]})
 
 
 async def _handle_newgame(query: CallbackQuery, session) -> None:

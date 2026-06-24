@@ -15,6 +15,7 @@ from ...app.schemas import (
     UserInputRequest,
 )
 from .. import observability, render
+from ..config import TelegramBotSettings
 from ..i18n import copy as i18n
 from .bot_state import BotState
 
@@ -35,11 +36,13 @@ class GameSession:
         chat_id: int,
         gm: GameManager,
         bot: "Bot",
+        settings: TelegramBotSettings,
     ) -> None:
         self.user_id = user_id
         self.chat_id = chat_id
         self.gm = gm
         self._bot = bot
+        self._settings = settings
         self.state = BotState.IDLE
         self.language: Language = "en"
         self.human_role: HumanRole = "none"
@@ -87,8 +90,15 @@ class GameSession:
             new_messages = snapshot.messages[self._last_sent_msg_idx:]
             self._last_sent_msg_idx = len(snapshot.messages)
 
+            spectator_delay = (
+                self._settings.ai_spectator_message_delay_seconds
+                if self.human_role == "none"
+                else 0.0
+            )
             for msg in new_messages:
                 await self._dispatch_message(msg, snapshot)
+                if spectator_delay > 0:
+                    await asyncio.sleep(spectator_delay)
 
             await self._flush_system_buffer()
 

@@ -159,7 +159,8 @@ class TestRateLimitIntegration(unittest.TestCase):
 
         mock_gm = MagicMock()
         mock_bot = MagicMock()
-        session = GameSession(user_id=1, chat_id=1, gm=mock_gm, bot=mock_bot)
+        mock_settings = MagicMock(ai_spectator_message_delay_seconds=0.0)
+        session = GameSession(user_id=1, chat_id=1, gm=mock_gm, bot=mock_bot, settings=mock_settings)
 
         # First call passes
         self.assertTrue(session.check_rate_limit())
@@ -172,7 +173,8 @@ class TestRateLimitIntegration(unittest.TestCase):
 
         mock_gm = MagicMock()
         mock_bot = MagicMock()
-        session = GameSession(user_id=1, chat_id=1, gm=mock_gm, bot=mock_bot)
+        mock_settings = MagicMock(ai_spectator_message_delay_seconds=0.0)
+        session = GameSession(user_id=1, chat_id=1, gm=mock_gm, bot=mock_bot, settings=mock_settings)
 
         self.assertFalse(session.is_duplicate_update(100))  # first time
         self.assertTrue(session.is_duplicate_update(100))   # duplicate
