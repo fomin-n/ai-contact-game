@@ -11,7 +11,7 @@ from .. import observability
 from ..i18n import copy as i18n
 from ..safety import MAX_CLUE_LENGTH, sanitize_text, validate_clue_input, validate_word_input
 from ..session.bot_state import BotState
-from ._helpers import get_or_create_session, is_allowed_chat
+from ._helpers import get_or_create_session, is_allowed_chat, reply_system
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     if not is_allowed_chat(update, context):
-        await update.message.reply_text(i18n.get("private_only"))
+        await reply_system(update.message, i18n.get("private_only"), "en")
         return
 
     session = await get_or_create_session(user.id, chat.id, context)
@@ -46,7 +46,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             state = session.state
 
         if rate_limited:
-            await update.message.reply_text(i18n.get("rate_limited", lang))
+            await reply_system(update.message, i18n.get("rate_limited", lang), lang)
             observability._event(span, "rate_limited", {})
             return
 
@@ -63,7 +63,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         elif state == BotState.WAITING_PARTNER_GUESS:
             await _handle_partner_guess(session, text, update, span)
         else:
-            await update.message.reply_text(i18n.get("unexpected", lang))
+            await reply_system(update.message, i18n.get("unexpected", lang), lang)
             observability._event(span, "unexpected_state", {"state": state.name})
 
 
@@ -73,7 +73,7 @@ async def _handle_entering_secret(session, text: str, update: Update, span=None)
     word, err = validate_word_input(text, lang, "", [])
     if err:
         hint = i18n.get("lang_hint_ru" if lang == "ru" else "lang_hint_en", lang)
-        await update.message.reply_text(_word_error_message(err, lang, prefix="", hint=hint))
+        await reply_system(update.message, _word_error_message(err, lang, prefix="", hint=hint), lang)
         observability.record_validation_failure(span, "secret_word", err)
         return
 
@@ -86,21 +86,21 @@ async def _handle_entering_secret(session, text: str, update: Update, span=None)
     )
     try:
         await session.start_game(request)
-        await update.message.reply_text(i18n.get("game_started", lang))
+        await reply_system(update.message, i18n.get("game_started", lang), lang)
         observability._event(span, "game.started", {
             "language": lang,
             "human_role": "wordMaster",
         })
     except ValueError as exc:
-        await update.message.reply_text(
-            i18n.get("game_input_error", lang, error=str(exc))
+        await reply_system(
+            update.message, i18n.get("game_input_error", lang, error=str(exc)), lang
         )
         observability._event(span, "game.start_failed", {"error": str(exc)[:200]})
     except Exception as exc:
         LOGGER.error("Failed to start game for user %s: %s", session.user_id, exc)
         async with session.lock:
             session.state = BotState.IDLE
-        await update.message.reply_text(i18n.get("generic_error", lang))
+        await reply_system(update.message, i18n.get("generic_error", lang), lang)
         observability._event(span, "game.start_failed", {"error": str(exc)[:200]})
 
 
@@ -113,7 +113,7 @@ async def _handle_wm_guess(session, text: str, update: Update, span=None) -> Non
     word, err = validate_word_input(text, lang, prefix, used)
     if err:
         hint = i18n.get("lang_hint_ru" if lang == "ru" else "lang_hint_en", lang)
-        await update.message.reply_text(_word_error_message(err, lang, prefix=prefix, hint=hint))
+        await reply_system(update.message, _word_error_message(err, lang, prefix=prefix, hint=hint), lang)
         observability.record_validation_failure(span, "wm_guess", err)
         return
 
@@ -129,8 +129,8 @@ async def _handle_wm_guess(session, text: str, update: Update, span=None) -> Non
     except ValueError as exc:
         async with session.lock:
             session.state = BotState.WAITING_WM_GUESS
-        await update.message.reply_text(
-            i18n.get("game_input_error", lang, error=str(exc))
+        await reply_system(
+            update.message, i18n.get("game_input_error", lang, error=str(exc)), lang
         )
         observability._event(span, "input.rejected", {"error": str(exc)[:200]})
 
@@ -144,7 +144,7 @@ async def _handle_intended_word(session, text: str, update: Update, span=None) -
     word, err = validate_word_input(text, lang, prefix, used)
     if err:
         hint = i18n.get("lang_hint_ru" if lang == "ru" else "lang_hint_en", lang)
-        await update.message.reply_text(_word_error_message(err, lang, prefix=prefix, hint=hint))
+        await reply_system(update.message, _word_error_message(err, lang, prefix=prefix, hint=hint), lang)
         observability.record_validation_failure(span, "intended_word", err)
         return
 
@@ -155,7 +155,7 @@ async def _handle_intended_word(session, text: str, update: Update, span=None) -
         session.state = BotState.WAITING_CLUE
 
     observability._event(span, "user.submitted_intended_word", {"prefix": prefix})
-    await update.message.reply_text(i18n.get("player_move_step2", lang, word=word))
+    await reply_system(update.message, i18n.get("player_move_step2", lang, word=word), lang)
 
 
 async def _handle_clue(session, text: str, update: Update, span=None) -> None:
@@ -170,19 +170,19 @@ async def _handle_clue(session, text: str, update: Update, span=None) -> None:
         async with session.lock:
             session.state = BotState.WAITING_INTENDED_WORD
         snapshot = await session.gm.get_state()
-        await update.message.reply_text(
-            i18n.get("player_move_step1", lang, prefix=snapshot.currentPrefix)
+        await reply_system(
+            update.message, i18n.get("player_move_step1", lang, prefix=snapshot.currentPrefix), lang
         )
         return
 
     clue_text, clue_err = validate_clue_input(text, intended_word, lang, MAX_CLUE_LENGTH)
     if clue_err:
         if clue_err == "clue_contains_word":
-            await update.message.reply_text(
-                i18n.get("clue_contains_word", lang, word=intended_word)
+            await reply_system(
+                update.message, i18n.get("clue_contains_word", lang, word=intended_word), lang
             )
         else:
-            await update.message.reply_text(i18n.get(clue_err, lang))
+            await reply_system(update.message, i18n.get(clue_err, lang), lang)
         observability.record_validation_failure(span, "clue", clue_err)
         return
 
@@ -208,8 +208,8 @@ async def _handle_clue(session, text: str, update: Update, span=None) -> None:
         async with session.lock:
             session._pending_intended_word = intended_word
             session.state = BotState.WAITING_CLUE
-        await update.message.reply_text(
-            i18n.get("game_input_error", lang, error=str(exc))
+        await reply_system(
+            update.message, i18n.get("game_input_error", lang, error=str(exc)), lang
         )
         observability._event(span, "input.rejected", {"error": str(exc)[:200]})
 
@@ -223,7 +223,7 @@ async def _handle_partner_guess(session, text: str, update: Update, span=None) -
     word, err = validate_word_input(text, lang, prefix, used)
     if err:
         hint = i18n.get("lang_hint_ru" if lang == "ru" else "lang_hint_en", lang)
-        await update.message.reply_text(_word_error_message(err, lang, prefix=prefix, hint=hint))
+        await reply_system(update.message, _word_error_message(err, lang, prefix=prefix, hint=hint), lang)
         observability.record_validation_failure(span, "partner_guess", err)
         return
 
@@ -239,8 +239,8 @@ async def _handle_partner_guess(session, text: str, update: Update, span=None) -
     except ValueError as exc:
         async with session.lock:
             session.state = BotState.WAITING_PARTNER_GUESS
-        await update.message.reply_text(
-            i18n.get("game_input_error", lang, error=str(exc))
+        await reply_system(
+            update.message, i18n.get("game_input_error", lang, error=str(exc)), lang
         )
         observability._event(span, "input.rejected", {"error": str(exc)[:200]})
 

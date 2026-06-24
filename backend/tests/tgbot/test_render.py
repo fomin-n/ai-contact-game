@@ -168,6 +168,15 @@ class TestRenderInlineEvent(unittest.TestCase):
         self.assertIn("✋", result)
         self.assertIn("Contact broken.", result)
 
+    def test_outcome_is_italic_compact_line_not_bold_or_blockquote(self):
+        msg = _msg(role="system", text="Contact broken.", event_type="blocked")
+        result = render.render_inline_event(msg, "en")
+        self.assertTrue(result.startswith("<i>"))
+        self.assertTrue(result.endswith("</i>"))
+        self.assertNotIn("<b>", result)
+        self.assertNotIn("<blockquote>", result)
+        self.assertNotIn("[System]", result)
+
     def test_failed_intercept_has_handshake(self):
         msg = _msg(role="system", text="There is contact!", event_type="failed-intercept")
         result = render.render_inline_event(msg, "en")
@@ -255,7 +264,32 @@ class TestRenderStatus(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRenderPromptWmGuess(unittest.TestCase):
-    def test_contains_role_and_prefix(self):
+    def test_contains_system_label_and_prefix(self):
+        from backend.app.schemas import PendingUserInput
+        state = _state(currentPrefix="CO")
+        state.pendingUserInput = PendingUserInput(
+            kind="wordMasterGuess", role="wordMaster",
+            promptText="Guess", placeholderText="...",
+            currentPrefix="CO", clue="a clever hint", actingPlayer="playerA",
+        )
+        result = render.render_prompt_wm_guess(state, "en")
+        self.assertIn("<i>[System]</i>", result)
+        self.assertIn("<code>CO</code>", result)
+
+    def test_clue_attributed_to_acting_player(self):
+        from backend.app.schemas import PendingUserInput
+        state = _state(currentPrefix="CO")
+        state.pendingUserInput = PendingUserInput(
+            kind="wordMasterGuess", role="wordMaster",
+            promptText="Guess", placeholderText="...",
+            currentPrefix="CO", clue="tricky clue here", actingPlayer="playerB",
+        )
+        result = render.render_prompt_wm_guess(state, "en")
+        self.assertIn("🟢", result)
+        self.assertIn("<b>Player B</b>", result)
+        self.assertIn("<blockquote>tricky clue here</blockquote>", result)
+
+    def test_clue_without_acting_player_uses_generic_label(self):
         from backend.app.schemas import PendingUserInput
         state = _state(currentPrefix="CO")
         state.pendingUserInput = PendingUserInput(
@@ -264,20 +298,8 @@ class TestRenderPromptWmGuess(unittest.TestCase):
             currentPrefix="CO", clue="a clever hint",
         )
         result = render.render_prompt_wm_guess(state, "en")
-        self.assertIn("🔴", result)
-        self.assertIn("<b>Word Master</b>", result)
-        self.assertIn("<b>CO</b>", result)
-
-    def test_clue_shown_in_blockquote(self):
-        from backend.app.schemas import PendingUserInput
-        state = _state(currentPrefix="CO")
-        state.pendingUserInput = PendingUserInput(
-            kind="wordMasterGuess", role="wordMaster",
-            promptText="Guess", placeholderText="...",
-            currentPrefix="CO", clue="tricky clue here",
-        )
-        result = render.render_prompt_wm_guess(state, "en")
-        self.assertIn("<blockquote>tricky clue here</blockquote>", result)
+        self.assertIn("<blockquote>a clever hint</blockquote>", result)
+        self.assertIn("📨", result)
 
     def test_clue_text_is_escaped(self):
         from backend.app.schemas import PendingUserInput
@@ -285,7 +307,7 @@ class TestRenderPromptWmGuess(unittest.TestCase):
         state.pendingUserInput = PendingUserInput(
             kind="wordMasterGuess", role="wordMaster",
             promptText="Guess", placeholderText="...",
-            currentPrefix="CO", clue="<inject>",
+            currentPrefix="CO", clue="<inject>", actingPlayer="playerA",
         )
         result = render.render_prompt_wm_guess(state, "en")
         self.assertNotIn("<inject>", result)
@@ -303,18 +325,19 @@ class TestRenderPromptWmGuess(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRenderPromptPartnerGuess(unittest.TestCase):
-    def test_shows_clue_in_blockquote(self):
+    def test_shows_clue_attributed_to_player_b(self):
         from backend.app.schemas import PendingUserInput
         state = _state(currentPrefix="CO")
         state.pendingUserInput = PendingUserInput(
             kind="partnerGuess", role="playerA",
             promptText="Guess", placeholderText="...",
-            currentPrefix="CO", clue="Player B's mysterious clue",
+            currentPrefix="CO", clue="Player B's mysterious clue", actingPlayer="playerB",
         )
         result = render.render_prompt_partner_guess(state, "en")
-        self.assertIn("🔵", result)
+        self.assertIn("🟢", result)
         self.assertIn("<blockquote>Player B's mysterious clue</blockquote>", result)
-        self.assertIn("<b>CO</b>", result)
+        self.assertIn("<code>CO</code>", result)
+        self.assertIn("<i>[System]</i>", result)
 
 
 # ---------------------------------------------------------------------------
@@ -322,19 +345,19 @@ class TestRenderPromptPartnerGuess(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRenderPromptPlayerMove(unittest.TestCase):
-    def test_shows_prefix_and_role(self):
+    def test_shows_system_label_and_prefix(self):
         state = _state(currentPrefix="CO")
         state.pendingUserInput = None
         result = render.render_prompt_player_move(state, "en")
-        self.assertIn("🔵", result)
-        self.assertIn("<b>CO</b>", result)
+        self.assertIn("<i>[System]</i>", result)
+        self.assertIn("<code>CO</code>", result)
 
     def test_russian(self):
         state = _state(currentPrefix="К", language="ru")
         state.pendingUserInput = None
         result = render.render_prompt_player_move(state, "ru")
-        self.assertIn("🔵", result)
-        self.assertIn("<b>К</b>", result)
+        self.assertIn("<i>[Система]</i>", result)
+        self.assertIn("<code>К</code>", result)
 
 
 # ---------------------------------------------------------------------------
@@ -438,6 +461,50 @@ class TestIsHumanOrigin(unittest.TestCase):
         # AI player's intended word is informative — must remain visible
         msg = _msg(role="playerB", event_type="intended-word")
         self.assertFalse(render.is_human_origin(msg, "playerA"))
+
+
+# ---------------------------------------------------------------------------
+# truncate_plain()
+# ---------------------------------------------------------------------------
+
+class TestTruncatePlain(unittest.TestCase):
+    def test_short_text_unchanged(self):
+        self.assertEqual(render.truncate_plain("hello"), "hello")
+
+    def test_long_text_truncated_with_ellipsis(self):
+        text = "a" * 5000
+        result = render.truncate_plain(text)
+        self.assertEqual(len(result), render.TELEGRAM_MAX_MESSAGE_LENGTH)
+        self.assertTrue(result.endswith("…"))
+
+    def test_custom_limit(self):
+        result = render.truncate_plain("abcdefghij", limit=5)
+        self.assertEqual(result, "abcd…")
+
+
+# ---------------------------------------------------------------------------
+# render_system_text()
+# ---------------------------------------------------------------------------
+
+class TestRenderSystemText(unittest.TestCase):
+    def test_has_italic_label_and_body_on_next_line(self):
+        result = render.render_system_text("Please wait a moment.", "en")
+        self.assertEqual(result, "<i>[System]</i>\nPlease wait a moment.")
+
+    def test_russian_label(self):
+        result = render.render_system_text("Подождите немного.", "ru")
+        self.assertEqual(result, "<i>[Система]</i>\nПодождите немного.")
+
+    def test_body_is_html_escaped(self):
+        result = render.render_system_text("<b>inject</b> & run", "en")
+        self.assertNotIn("<b>inject</b>", result)
+        self.assertIn("&lt;b&gt;inject&lt;/b&gt;", result)
+        self.assertIn("&amp;", result)
+
+    def test_no_bold_or_blockquote_in_body(self):
+        result = render.render_system_text("plain instruction", "en")
+        self.assertNotIn("<b>", result)
+        self.assertNotIn("<blockquote>", result)
 
 
 if __name__ == "__main__":

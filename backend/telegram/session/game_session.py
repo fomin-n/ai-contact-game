@@ -186,6 +186,16 @@ class GameSession:
             LOGGER.warning("Failed to send game over to chat %s: %s", self.chat_id, exc)
 
     async def _send_html(self, text: str) -> None:
+        if len(text) > render.TELEGRAM_MAX_MESSAGE_LENGTH:
+            LOGGER.warning(
+                "Message for chat %s exceeds Telegram length limit (%d chars), sending truncated plain text",
+                self.chat_id, len(text),
+            )
+            try:
+                await self._bot.send_message(self.chat_id, render.truncate_plain(text))
+            except Exception as exc:
+                LOGGER.warning("Failed to send truncated message to chat %s: %s", self.chat_id, exc)
+            return
         try:
             await self._bot.send_message(self.chat_id, text, parse_mode=_HTML)
             LOGGER.debug("sent message to chat %s (%d chars)", self.chat_id, len(text))

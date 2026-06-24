@@ -9,7 +9,7 @@ from ...app.schemas import StartGameRequest
 from .. import observability
 from ..i18n import copy as i18n
 from ..session.bot_state import BotState
-from ._helpers import get_or_create_session, is_allowed_chat
+from ._helpers import edit_system, get_or_create_session, is_allowed_chat, reply_system, send_system
 
 LOGGER = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if not is_allowed_chat(update, context):
         if query.message:
-            await query.message.reply_text(i18n.get("private_only"))
+            await reply_system(query.message, i18n.get("private_only"), "en")
         return
 
     data = query.data or ""
@@ -79,10 +79,7 @@ async def _handle_language(query: CallbackQuery, session, lang_code: str, span=N
             ),
         ]
     ])
-    await query.edit_message_text(
-        i18n.get("select_role", lang_code),
-        reply_markup=keyboard,
-    )
+    await edit_system(query, i18n.get("select_role", lang_code), lang_code, reply_markup=keyboard)
 
 
 async def _handle_role(
@@ -107,9 +104,9 @@ async def _handle_role(
     observability._attrs(span, {"game.role_selected": role})
 
     if role == "wordMaster":
-        await query.edit_message_text(i18n.get("enter_secret", lang))
+        await edit_system(query, i18n.get("enter_secret", lang), lang)
     else:
-        await query.edit_message_text(i18n.get("game_started", lang))
+        await edit_system(query, i18n.get("game_started", lang), lang)
         request = StartGameRequest(
             language=lang,
             playerAPersonality="",
@@ -126,7 +123,7 @@ async def _handle_role(
             LOGGER.error("Failed to start game for user %s: %s", session.user_id, exc)
             async with session.lock:
                 session.state = BotState.IDLE
-            await context.bot.send_message(session.chat_id, i18n.get("generic_error", lang))
+            await send_system(context.bot, session.chat_id, i18n.get("generic_error", lang), lang)
             observability._event(span, "game.start_failed", {"error": str(exc)[:200]})
 
 
@@ -144,4 +141,4 @@ async def _handle_newgame(query: CallbackQuery, session) -> None:
         ]
     ])
     if query.message:
-        await query.message.reply_text(i18n.get("select_language", lang), reply_markup=keyboard)
+        await reply_system(query.message, i18n.get("select_language", lang), lang, reply_markup=keyboard)

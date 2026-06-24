@@ -1,14 +1,24 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from telegram import Update
+from telegram.constants import ParseMode
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
+from .. import render
+
 if TYPE_CHECKING:
+    from telegram import Bot, Message
+    from telegram.ext import CallbackContext
+
     from ..auth.store import AuthStore
     from ..session.registry import SessionRegistry
     from ..session.game_session import GameSession
+
+LOGGER = logging.getLogger(__name__)
 
 
 def get_registry(context: ContextTypes.DEFAULT_TYPE) -> "SessionRegistry":
@@ -49,3 +59,64 @@ async def get_or_create_session(
 ) -> "GameSession":
     registry = get_registry(context)
     return await registry.get_or_create(user_id, chat_id, context.bot)
+
+
+def _prepare_system_send(text: str, lang: str) -> tuple[str | None, str]:
+    """Return (html_text_or_None, plain_fallback_text).
+
+    html_text is None when the rendered HTML would exceed Telegram's message
+    length limit — in that case callers should send the truncated plain
+    fallback directly rather than risk truncating valid HTML mid-tag.
+    """
+    html_text = render.render_system_text(text, lang)
+    plain_fallback = render.truncate_plain(text)
+    if len(html_text) > render.TELEGRAM_MAX_MESSAGE_LENGTH:
+        return None, plain_fallback
+    return html_text, plain_fallback
+
+
+async def reply_system(message: "Message", text: str, lang: str, **kwargs: object) -> None:
+    """Reply with the [System]-styled rendering, falling back to plain text.
+
+    Use for every instructional/error/confirmation string sourced from i18n
+    copy — keeps these visually distinct (lighter) from player dialogue.
+    """
+    html_text, plain_fallback = _prepare_system_send(text, lang)
+    if html_text is None:
+        await message.reply_text(plain_fallback, **kwargs)
+        return
+    try:
+        await message.reply_text(html_text, parse_mode=ParseMode.HTML, **kwargs)
+    except BadRequest as exc:
+        LOGGER.warning("System message rejected as HTML, falling back to plain: %s", exc)
+        await message.reply_text(plain_fallback, **kwargs)
+
+
+async def edit_system(target, text: str, lang: str, **kwargs: object) -> None:
+    """Edit a message in place with the [System]-styled rendering.
+
+    `target` is anything exposing `edit_message_text` (a `CallbackQuery` or a
+    `Message`).
+    """
+    html_text, plain_fallback = _prepare_system_send(text, lang)
+    if html_text is None:
+        await target.edit_message_text(plain_fallback, **kwargs)
+        return
+    try:
+        await target.edit_message_text(html_text, parse_mode=ParseMode.HTML, **kwargs)
+    except BadRequest as exc:
+        LOGGER.warning("System edit rejected as HTML, falling back to plain: %s", exc)
+        await target.edit_message_text(plain_fallback, **kwargs)
+
+
+async def send_system(bot: "Bot", chat_id: int, text: str, lang: str, **kwargs: object) -> None:
+    """Send a standalone [System]-styled message to a chat, with plain-text fallback."""
+    html_text, plain_fallback = _prepare_system_send(text, lang)
+    if html_text is None:
+        await bot.send_message(chat_id, plain_fallback, **kwargs)
+        return
+    try:
+        await bot.send_message(chat_id, html_text, parse_mode=ParseMode.HTML, **kwargs)
+    except BadRequest as exc:
+        LOGGER.warning("System send rejected as HTML, falling back to plain: %s", exc)
+        await bot.send_message(chat_id, plain_fallback, **kwargs)

@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 from .. import observability
 from ..i18n import copy as i18n
 from ..session.bot_state import BotState
-from ._helpers import get_lang, get_or_create_session, get_registry, is_allowed_chat
+from ._helpers import get_lang, get_or_create_session, get_registry, is_allowed_chat, reply_system
 
 LOGGER = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not update.message:
         return
     if not is_allowed_chat(update, context):
-        await update.message.reply_text(i18n.get("private_only"))
+        await reply_system(update.message, i18n.get("private_only"), "en")
         return
     user = update.effective_user
     if not user:
@@ -31,7 +31,7 @@ async def newgame_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not update.message:
         return
     if not is_allowed_chat(update, context):
-        await update.message.reply_text(i18n.get("private_only"))
+        await reply_system(update.message, i18n.get("private_only"), "en")
         return
     user = update.effective_user
     if not user:
@@ -46,7 +46,7 @@ async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     async with observability.span_for_update("command.rules", update):
         lang = get_lang(update, context)
-        await update.message.reply_text(i18n.get("rules", lang))
+        await reply_system(update.message, i18n.get("rules", lang), lang)
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -60,7 +60,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     async with observability.span_for_update("command.status", update, session=session) as span:
         lang = get_lang(update, context)
         if session is None or session.state == BotState.IDLE:
-            await update.message.reply_text(i18n.get("status_no_game", lang))
+            await reply_system(update.message, i18n.get("status_no_game", lang), lang)
             return
 
         state = await session.gm.get_state()
@@ -78,7 +78,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             prefix=state.currentPrefix or "-",
             used_words=used,
         )
-        await update.message.reply_text(text)
+        await reply_system(update.message, text, lang)
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -92,7 +92,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     async with observability.span_for_update("command.cancel", update, session=session) as span:
         lang = get_lang(update, context)
         if session is None or session.state == BotState.IDLE:
-            await update.message.reply_text(i18n.get("cancel_no_game", lang))
+            await reply_system(update.message, i18n.get("cancel_no_game", lang), lang)
             observability.record_auth_outcome(span, "no_active_game")
             return
 
@@ -101,7 +101,7 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             session.state = BotState.IDLE
             session._pending_intended_word = None
 
-        await update.message.reply_text(i18n.get("cancel_done", lang))
+        await reply_system(update.message, i18n.get("cancel_done", lang), lang)
         observability._event(span, "game.cancelled", {})
 
 
@@ -120,4 +120,4 @@ async def _begin_new_game_flow(update: Update, context: ContextTypes.DEFAULT_TYP
             InlineKeyboardButton(i18n.get("btn_english"), callback_data="lang:en"),
         ]
     ])
-    await update.message.reply_text(i18n.get("select_language"), reply_markup=keyboard)
+    await reply_system(update.message, i18n.get("select_language"), "en", reply_markup=keyboard)

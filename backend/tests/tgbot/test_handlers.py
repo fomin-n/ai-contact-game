@@ -2,6 +2,9 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from telegram.constants import ParseMode
+from telegram.error import BadRequest
+
 from backend.telegram.session.bot_state import BotState
 from backend.telegram.i18n import copy as i18n
 
@@ -330,7 +333,52 @@ class TestPrivateChatOnly(unittest.IsolatedAsyncioTestCase):
 
         update.message.reply_text.assert_awaited_once()
         text = update.message.reply_text.call_args[0][0]
-        self.assertEqual(text, i18n.get("private_only"))
+        self.assertIn(i18n.get("private_only"), text)
+        self.assertIn("[System]", text)
+
+
+class TestSystemMessageHelpers(unittest.IsolatedAsyncioTestCase):
+    async def test_reply_system_sends_html_with_label(self):
+        from backend.telegram.handlers._helpers import reply_system
+
+        message = MagicMock()
+        message.reply_text = AsyncMock()
+
+        await reply_system(message, "Please wait a moment.", "en")
+
+        message.reply_text.assert_awaited_once()
+        args, kwargs = message.reply_text.call_args
+        self.assertIn("[System]", args[0])
+        self.assertEqual(kwargs.get("parse_mode"), ParseMode.HTML)
+
+    async def test_reply_system_falls_back_to_plain_on_bad_request(self):
+        from backend.telegram.handlers._helpers import reply_system
+
+        message = MagicMock()
+        message.reply_text = AsyncMock(
+            side_effect=[BadRequest("Can't parse entities"), None]
+        )
+
+        await reply_system(message, "Please wait a moment.", "en")
+
+        self.assertEqual(message.reply_text.await_count, 2)
+        second_args, second_kwargs = message.reply_text.call_args_list[1]
+        self.assertEqual(second_args[0], "Please wait a moment.")
+        self.assertNotIn("parse_mode", second_kwargs)
+
+    async def test_reply_system_skips_html_when_oversized(self):
+        from backend.telegram.handlers._helpers import reply_system
+
+        message = MagicMock()
+        message.reply_text = AsyncMock()
+        oversized = "x" * 5000
+
+        await reply_system(message, oversized, "en")
+
+        message.reply_text.assert_awaited_once()
+        args, kwargs = message.reply_text.call_args
+        self.assertNotIn("parse_mode", kwargs)
+        self.assertLessEqual(len(args[0]), 4096)
 
 
 class TestModelInfoHidden(unittest.IsolatedAsyncioTestCase):

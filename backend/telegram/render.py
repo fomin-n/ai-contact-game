@@ -2,11 +2,22 @@
 
 All user/LLM-generated text is passed through `esc()` before embedding in HTML.
 Nothing in this module does I/O or holds state.
+
+Visual language (three tiers, kept visually distinct on purpose):
+  - System (instructions, errors, menus): italic "[System]"/"[Система]" label
+    on its own line, plain (non-bold) body below. Lightest weight.
+  - Dialogue (an actual clue or guess spoken by a player/Word Master): bold
+    role header with emoji, followed by the utterance in a <blockquote>.
+  - Outcome (contact made/broken, reveals): single italic line with an emoji,
+    no label — compact, no blockquote, sits between the two above in weight.
+Persistent status (turn/prefix/used words) is sent once and edited in place.
 """
 from __future__ import annotations
 
 import html
 from typing import TYPE_CHECKING
+
+from .i18n import copy as i18n
 
 if TYPE_CHECKING:
     from ..app.schemas import GameMessage, GameState
@@ -59,9 +70,25 @@ _INLINE_EVENTS = frozenset({
 _SUPPRESS_EVENTS = frozenset({"game-over", "error"})
 
 
+TELEGRAM_MAX_MESSAGE_LENGTH = 4096
+
+
 def esc(text: str) -> str:
     """HTML-escape a string so it cannot inject tags or entities."""
     return html.escape(text, quote=False)
+
+
+def truncate_plain(text: str, limit: int = TELEGRAM_MAX_MESSAGE_LENGTH) -> str:
+    """Truncate plain (non-HTML) text to fit Telegram's message length limit.
+
+    Safe to call on already-rendered HTML strings too, but only when they are
+    about to be sent as plain-text fallback — truncating mid-tag would produce
+    invalid markup, so callers must not pass truncated output back through a
+    parse_mode=HTML send.
+    """
+    if len(text) <= limit:
+        return text
+    return text[: limit - 1].rstrip() + "…"
 
 
 def _role_header(role: str, lang: str) -> str:
@@ -69,6 +96,23 @@ def _role_header(role: str, lang: str) -> str:
     names = _ROLE_NAME.get(lang) or _ROLE_NAME["en"]
     name = names.get(role, role)
     return f"{emoji} <b>{esc(name)}</b>"
+
+
+def _system_label(lang: str) -> str:
+    return f"<i>{esc(i18n.get('system_label', lang))}</i>"
+
+
+def _dialogue_block(role: str, text: str, lang: str) -> str:
+    return f"{_role_header(role, lang)}\n<blockquote>{esc(text)}</blockquote>"
+
+
+def render_system_text(text: str, lang: str) -> str:
+    """Wrap a fully-composed system/instructional string with the [System] label.
+
+    `text` is treated as plain text and HTML-escaped wholesale — callers must
+    not pre-embed HTML tags in it (the i18n copy strings never do).
+    """
+    return f"{_system_label(lang)}\n{esc(text)}"
 
 
 def classify_event(msg: "GameMessage") -> str:
@@ -90,14 +134,14 @@ def classify_event(msg: "GameMessage") -> str:
 
 def render_dialogue(msg: "GameMessage", lang: str) -> str:
     """Full dialogue message (clue or WM guess): role header + blockquote."""
-    return f"{_role_header(msg.role, lang)}\n<blockquote>{esc(msg.text)}</blockquote>"
+    return _dialogue_block(msg.role, msg.text, lang)
 
 
 def render_inline_event(msg: "GameMessage", lang: str) -> str:  # noqa: ARG001
-    """Single compact line for a contact/reveal/system event."""
+    """Single compact, lightweight line for a contact/reveal outcome."""
     event_type = (msg.metadata or {}).get("eventType", "")
     emoji = _EVENT_EMOJI.get(event_type) or _ROLE_EMOJI.get(msg.role, "•")
-    return f"{emoji} {esc(msg.text)}"
+    return f"<i>{emoji} {esc(msg.text)}</i>"
 
 
 def is_human_origin(msg: "GameMessage", human_role: str) -> bool:
@@ -117,8 +161,6 @@ def render_system_batch(lines: list[str]) -> str:
 
 def render_status(snapshot: "GameState", lang: str) -> str:
     """Persistent game status block — sent once and edited in-place."""
-    from .i18n import copy as i18n
-
     turn = f"{snapshot.turnNumber} / {snapshot.maxTurns}"
     lines = [
         f"🎮 <b>{esc(i18n.get('status_game_name', lang))}</b>  ·  "
@@ -128,59 +170,54 @@ def render_status(snapshot: "GameState", lang: str) -> str:
     if snapshot.usedWords:
         words = snapshot.usedWords[-15:]
         lines.append(
-            f"{esc(i18n.get('status_used', lang))}: {', '.join(esc(w) for w in words)}"
+            f"<i>{esc(i18n.get('status_used', lang))}: "
+            f"{', '.join(esc(w) for w in words)}</i>"
         )
     return "\n".join(lines)
 
 
+def _clue_block(actor: str | None, clue: str, lang: str) -> str:
+    """Render a received clue: actual speaker's header when known, else a generic label."""
+    if actor:
+        header = _role_header(actor, lang)
+    else:
+        header = f"📨 <b>{esc(i18n.get('prompt_clue_label', lang))}</b>"
+    return f"{header}\n<blockquote>{esc(clue)}</blockquote>"
+
+
 def render_prompt_wm_guess(snapshot: "GameState", lang: str) -> str:
     """Input prompt for Word Master to guess the clue word."""
-    from .i18n import copy as i18n
-
     prefix = esc(snapshot.currentPrefix)
-    header = f"🔴 <b>{esc(i18n.get('role_word_master', lang))}</b>"
-    clue_block = ""
-    if snapshot.pendingUserInput and snapshot.pendingUserInput.clue:
-        clue_label = esc(i18n.get("prompt_clue_label", lang))
-        clue_block = (
-            f"\n{clue_label}:\n"
-            f"<blockquote>{esc(snapshot.pendingUserInput.clue)}</blockquote>"
-        )
+    parts = []
+    pending = snapshot.pendingUserInput
+    if pending and pending.clue:
+        parts.append(_clue_block(pending.actingPlayer, pending.clue, lang))
     action = esc(i18n.get("prompt_wm_guess_label", lang))
-    return f"{header}{clue_block}\n{action} (<b>{prefix}</b>):"
+    parts.append(f"{_system_label(lang)}\n{action} (<code>{prefix}</code>):")
+    return "\n\n".join(parts)
 
 
 def render_prompt_player_move(snapshot: "GameState", lang: str) -> str:
     """Input prompt for Player A: step 1 — enter the intended word."""
-    from .i18n import copy as i18n
-
     prefix = esc(snapshot.currentPrefix)
-    header = f"🔵 <b>{esc(i18n.get('role_player_a', lang))}</b>"
     action = esc(i18n.get("prompt_player_move_label", lang))
-    return f"{header}\n{action} <b>{prefix}</b>:"
+    return f"{_system_label(lang)}\n{action} (<code>{prefix}</code>):"
 
 
 def render_prompt_partner_guess(snapshot: "GameState", lang: str) -> str:
     """Input prompt for Player A: guess what Player B encoded."""
-    from .i18n import copy as i18n
-
     prefix = esc(snapshot.currentPrefix)
-    header = f"🔵 <b>{esc(i18n.get('role_player_a', lang))}</b>"
-    clue_block = ""
-    if snapshot.pendingUserInput and snapshot.pendingUserInput.clue:
-        clue_label = esc(i18n.get("prompt_clue_label", lang))
-        clue_block = (
-            f"\n{clue_label}:\n"
-            f"<blockquote>{esc(snapshot.pendingUserInput.clue)}</blockquote>"
-        )
+    parts = []
+    pending = snapshot.pendingUserInput
+    if pending and pending.clue:
+        parts.append(_clue_block(pending.actingPlayer, pending.clue, lang))
     action = esc(i18n.get("prompt_partner_guess_label", lang))
-    return f"{header}{clue_block}\n{action} (<b>{prefix}</b>):"
+    parts.append(f"{_system_label(lang)}\n{action} (<code>{prefix}</code>):")
+    return "\n\n".join(parts)
 
 
 def render_game_over(snapshot: "GameState", lang: str) -> str:
     """Game-over message with winner, secret word, and stats."""
-    from .i18n import copy as i18n
-
     word = esc(snapshot.secretWord)
     if snapshot.winner == "players":
         header = i18n.get("game_over_players_win", lang, word=word)
@@ -196,4 +233,4 @@ def render_game_over(snapshot: "GameState", lang: str) -> str:
         turns=snapshot.turnNumber,
         used=len(snapshot.usedWords),
     )
-    return f"{header}\n{stats}"
+    return f"<b>{header}</b>\n<i>{stats}</i>"

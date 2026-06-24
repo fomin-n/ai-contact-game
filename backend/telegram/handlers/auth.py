@@ -8,7 +8,7 @@ from telegram.ext import ApplicationHandlerStop, ContextTypes
 from ..auth.store import AuthStore
 from .. import observability
 from ..i18n import copy as i18n
-from ._helpers import get_auth_store, is_allowed_chat
+from ._helpers import get_auth_store, is_allowed_chat, reply_system
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ async def auth_gate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if first_word == "/start":
         lang = _guess_lang(update)
         if message:
-            await message.reply_text(i18n.get("auth_required_welcome", lang))
+            await reply_system(message, i18n.get("auth_required_welcome", lang), lang)
         LOGGER.info("auth_gate: blocked /start for user %s", user.id)
         raise ApplicationHandlerStop
 
@@ -58,7 +58,7 @@ async def auth_gate(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Any other message or command
     lang = _guess_lang(update)
     if message:
-        await message.reply_text(i18n.get("auth_required_brief", lang))
+        await reply_system(message, i18n.get("auth_required_brief", lang), lang)
     LOGGER.info("auth_gate: blocked message for user %s", user.id)
     raise ApplicationHandlerStop
 
@@ -67,7 +67,7 @@ async def login_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not update.message:
         return
     if not is_allowed_chat(update, context):
-        await update.message.reply_text(i18n.get("private_only"))
+        await reply_system(update.message, i18n.get("private_only"), "en")
         return
 
     user = update.effective_user
@@ -79,7 +79,7 @@ async def login_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
         raw_code = " ".join(context.args or []).strip()
         if not raw_code:
-            await update.message.reply_text(i18n.get("login_usage", lang))
+            await reply_system(update.message, i18n.get("login_usage", lang), lang)
             observability.record_auth_outcome(span, "missing_code")
             return
 
@@ -88,12 +88,12 @@ async def login_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         observability.record_auth_outcome(span, outcome)
 
         if outcome == "ok":
-            await update.message.reply_text(i18n.get("login_success", lang))
+            await reply_system(update.message, i18n.get("login_success", lang), lang)
         elif outcome == "already_authorized":
-            await update.message.reply_text(i18n.get("login_already_authorized", lang))
+            await reply_system(update.message, i18n.get("login_already_authorized", lang), lang)
         else:
             # "invalid" or "already_used" — same message to avoid oracle attacks
-            await update.message.reply_text(i18n.get("login_invalid", lang))
+            await reply_system(update.message, i18n.get("login_invalid", lang), lang)
 
 
 def _guess_lang(update: Update) -> str:
