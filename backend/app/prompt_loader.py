@@ -63,18 +63,19 @@ def load_common_blocks(version: str = DEFAULT_PROMPT_VERSION) -> dict[str, str]:
 @lru_cache(maxsize=64)
 def load_prompt(task_name: str, version: str = DEFAULT_PROMPT_VERSION) -> PromptTemplate:
     data = _read_yaml(PROMPT_ROOT / f"{task_name}.{version}.yaml")
-    required_fields = ("id", "version", "temperature", "model_role", "schema", "system", "user")
+    required_fields = ("id", "version", "temperature", "model_role", "system", "user")
     missing = [field for field in required_fields if field not in data]
     if missing:
         raise PromptError(f"Prompt {task_name}.{version} is missing fields: {', '.join(missing)}")
-    if not isinstance(data["schema"], dict):
+    schema = data.get("schema", {})
+    if not isinstance(schema, dict):
         raise PromptError(f"Prompt {task_name}.{version} schema must be an object.")
     return PromptTemplate(
         id=str(data["id"]),
         version=str(data["version"]),
         temperature=float(data["temperature"]),
         model_role=str(data["model_role"]),
-        schema=data["schema"],
+        schema=schema,
         system=str(data["system"]).strip(),
         user=str(data["user"]).strip(),
     )

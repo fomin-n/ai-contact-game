@@ -139,18 +139,18 @@ class ConfigResponse(BaseModel):
 
 
 class SecretWord(BaseModel):
-    word: str
+    word: str = Field(description="An existing common singular noun in normal dictionary form with letters only.")
 
 
 class PlayerMove(BaseModel):
-    intendedWord: str
-    clue: str
+    intendedWord: str = Field(description="An existing common singular noun that starts with currentPrefix.")
+    clue: str = Field(description="A short cryptic clue that does not contain intendedWord.")
 
 
 class MasterGuess(BaseModel):
-    guess: str
-    confidence: float = 0
+    guess: str = Field(description="One concrete existing common singular noun that starts with currentPrefix.")
+    confidence: float = Field(default=0, ge=0, le=1, description="Confidence score from 0 to 1.")
 
 
 class PartnerGuess(BaseModel):
-    guess: str
+    guess: str = Field(description="One existing common singular noun that starts with currentPrefix.")

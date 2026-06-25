@@ -2,16 +2,6 @@ id: guess_partner_word
 version: v1
 temperature: 0.45
 model_role: player
-schema:
-  type: object
-  additionalProperties: false
-  required:
-    - guess
-  properties:
-    guess:
-      type: string
-      minLength: 1
-      description: One existing common singular noun that starts with currentPrefix.
 system: |
   You are a player in the word game Contact.
   Guess the most likely intended word from your partner's clue.
