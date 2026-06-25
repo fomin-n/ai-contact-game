@@ -136,7 +136,7 @@ sudo systemctl restart ai-contact-game
 
 Traces are sent to Arize Phoenix when `ENABLE_PHOENIX_TRACING=true`. Access the Phoenix UI via SSH port forwarding:
 ```bash
-ssh -L 6006:127.0.0.1:6006 glados@65.109.139.84 -N
+ssh -L 6006:127.0.0.1:6006 user@host -N
 ```
 Then open `http://localhost:6006` and select the `ai-contact-game-bot` project.
 

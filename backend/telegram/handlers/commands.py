@@ -70,11 +70,13 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "game.prefix": state.currentPrefix or "",
         })
         used = ", ".join(state.usedWords) if state.usedWords else i18n.get("used_words_none", lang)
+        # max_turns is briefly 0 before the secret word (and therefore the
+        # attempt limit) is known.
         text = i18n.get(
             "status_template",
             lang,
             turn=state.turnNumber,
-            max_turns=state.maxTurns,
+            max_turns=state.maxTurns if state.maxTurns > 0 else "—",
             prefix=state.currentPrefix or "-",
             used_words=used,
         )

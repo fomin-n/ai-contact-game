@@ -13,6 +13,7 @@ _COPY: dict[str, dict[str, str]] = {
         "thinking": "AI is thinking...",
         "game_started": "Game started!",
         "spectator_game_started": "Spectator mode started! Watching the AIs play. Use /cancel to stop.",
+        "daily_game_limit_reached": "You've reached today's limit of {limit} games. Please try again tomorrow.",
         "current_prefix": "Current prefix: {prefix}",
         "wm_guess_prompt": "Your turn, Word Master!\nGuess the encoded word. Prefix: {prefix}",
         "player_move_step1": "Your turn! Enter your intended word (must start with \"{prefix}\"):",
@@ -34,7 +35,10 @@ _COPY: dict[str, dict[str, str]] = {
             "Players try to guess it by exchanging encoded clues.\n"
             "If the Word Master intercepts a clue, contact is broken.\n"
             "If players make contact, the next letter is revealed.\n"
-            "Players win by guessing the full secret word.\n\n"
+            "Players win by guessing the full secret word.\n"
+            "The maximum number of attempts is fixed once the secret word is known: "
+            "three attempts for every letter after the first (already-revealed) one. "
+            "The Word Master wins if that limit is reached.\n\n"
             "Commands:\n"
             "/start or /newgame - new game\n"
             "/rules - show these rules\n"
@@ -73,7 +77,7 @@ _COPY: dict[str, dict[str, str]] = {
         "prompt_player_move_label": "Send an encoded clue for a word starting with",
         "prompt_partner_guess_label": "Guess the word Player B encoded",
         # Render / game over
-        "game_over_stats": "Turns: {turns}  ·  Words used: {used}",
+        "game_over_stats": "Attempts: {turns}/{max_turns}  ·  Words used: {used}",
         "auth_required_welcome": (
             "Welcome to AI Contact Game \U0001f7e2 (beta).\n\n"
             "Access is currently restricted to invited users.\n\n"
@@ -99,6 +103,7 @@ _COPY: dict[str, dict[str, str]] = {
         "thinking": "AI думает...",
         "game_started": "Игра началась!",
         "spectator_game_started": "Режим наблюдателя запущен! Смотрим, как играют ИИ. /cancel — чтобы остановить.",
+        "daily_game_limit_reached": "Вы достигли сегодняшнего лимита в {limit} игр. Попробуйте снова завтра.",
         "current_prefix": "Текущий префикс: {prefix}",
         "wm_guess_prompt": "Ваш ход, Ведущий!\nУгадайте зашифрованное слово. Префикс: {prefix}",
         "player_move_step1": "Ваш ход! Введите задуманное слово (должно начинаться с \"{prefix}\"):",
@@ -120,7 +125,10 @@ _COPY: dict[str, dict[str, str]] = {
             "Игроки пытаются угадать его, обмениваясь зашифрованными подсказками.\n"
             "Если Ведущий перехватывает подсказку, контакт оборван.\n"
             "Если игроки устанавливают контакт, открывается следующая буква.\n"
-            "Игроки побеждают, угадав секретное слово целиком.\n\n"
+            "Игроки побеждают, угадав секретное слово целиком.\n"
+            "Максимальное число попыток определяется после выбора секретного слова: "
+            "по три попытки на каждую букву, кроме первой (она открывается сразу). "
+            "Ведущий побеждает, если этот лимит достигнут.\n\n"
             "Команды:\n"
             "/start или /newgame - новая игра\n"
             "/rules - правила игры\n"
@@ -159,7 +167,7 @@ _COPY: dict[str, dict[str, str]] = {
         "prompt_player_move_label": "Отправьте зашифрованную подсказку для слова на",
         "prompt_partner_guess_label": "Угадайте слово Игрока B",
         # Render / game over
-        "game_over_stats": "Ходов: {turns}  ·  Слов использовано: {used}",
+        "game_over_stats": "Попыток: {turns}/{max_turns}  ·  Слов использовано: {used}",
         "auth_required_welcome": (
             "Добро пожаловать в AI Contact Game \U0001f7e2 (бета).\n\n"
             "Доступ ограничен приглашёнными пользователями.\n\n"

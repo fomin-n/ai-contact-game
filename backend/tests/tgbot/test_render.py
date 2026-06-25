@@ -117,30 +117,74 @@ class TestClassifyEvent(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# render_dialogue()
+# render_dialogue() — LLM / human role labels
 # ---------------------------------------------------------------------------
 
 class TestRenderDialogue(unittest.TestCase):
+    def test_ai_vs_ai_all_roles_get_llm_suffix(self):
+        for role in ("playerA", "playerB", "wordMaster"):
+            msg = _msg(role=role, event_type="clue")
+            result = render.render_dialogue(msg, "en")  # default human_role="none"
+            self.assertIn("(LLM)", result, f"Expected (LLM) for role {role}")
+
     def test_player_a_clue_en(self):
         msg = _msg(role="playerA", text="a clever clue", event_type="clue")
         result = render.render_dialogue(msg, "en")
         self.assertIn("🔵", result)
-        self.assertIn("<b>Player A</b>", result)
+        self.assertIn("<b>Player A (LLM)</b>", result)
         self.assertIn("<blockquote>a clever clue</blockquote>", result)
 
     def test_player_b_clue_ru(self):
         msg = _msg(role="playerB", text="подсказка", event_type="clue")
         result = render.render_dialogue(msg, "ru")
         self.assertIn("🟢", result)
-        self.assertIn("<b>Игрок B</b>", result)
+        self.assertIn("<b>Игрок B (LLM)</b>", result)
         self.assertIn("<blockquote>подсказка</blockquote>", result)
 
     def test_word_master_guess(self):
         msg = _msg(role="wordMaster", text="This is not collect!", event_type="master-guess")
         result = render.render_dialogue(msg, "en")
         self.assertIn("🔴", result)
-        self.assertIn("<b>Word Master</b>", result)
+        self.assertIn("<b>Word Master (LLM)</b>", result)
         self.assertIn("<blockquote>This is not collect!</blockquote>", result)
+
+    def test_human_playerA_no_llm_suffix(self):
+        msg = _msg(role="playerA", text="my clue", event_type="clue")
+        result = render.render_dialogue(msg, "en", human_role="playerA")
+        self.assertIn("<b>Player A</b>", result)
+        self.assertNotIn("(LLM)", result)
+
+    def test_ai_playerB_when_human_is_playerA(self):
+        msg = _msg(role="playerB", text="b clue", event_type="clue")
+        result = render.render_dialogue(msg, "en", human_role="playerA")
+        self.assertIn("<b>Player B (LLM)</b>", result)
+
+    def test_ai_wordmaster_when_human_is_playerA(self):
+        msg = _msg(role="wordMaster", text="not X!", event_type="master-guess")
+        result = render.render_dialogue(msg, "en", human_role="playerA")
+        self.assertIn("<b>Word Master (LLM)</b>", result)
+
+    def test_human_wordmaster_no_llm_suffix(self):
+        msg = _msg(role="wordMaster", text="not X!", event_type="master-guess")
+        result = render.render_dialogue(msg, "en", human_role="wordMaster")
+        self.assertIn("<b>Word Master</b>", result)
+        self.assertNotIn("(LLM)", result)
+
+    def test_ai_playerA_when_human_is_wordmaster(self):
+        msg = _msg(role="playerA", text="clue", event_type="clue")
+        result = render.render_dialogue(msg, "en", human_role="wordMaster")
+        self.assertIn("<b>Player A (LLM)</b>", result)
+
+    def test_russian_wordmaster_llm_suffix(self):
+        msg = _msg(role="wordMaster", text="не X!", event_type="master-guess")
+        result = render.render_dialogue(msg, "ru")
+        self.assertIn("<b>Ведущий (LLM)</b>", result)
+
+    def test_russian_human_wordmaster_no_suffix(self):
+        msg = _msg(role="wordMaster", text="не X!", event_type="master-guess")
+        result = render.render_dialogue(msg, "ru", human_role="wordMaster")
+        self.assertIn("<b>Ведущий</b>", result)
+        self.assertNotIn("(LLM)", result)
 
     def test_clue_text_is_html_escaped(self):
         msg = _msg(role="playerA", text="<evil> & trick", event_type="clue")
@@ -199,6 +243,74 @@ class TestRenderInlineEvent(unittest.TestCase):
         self.assertIn("&lt;b&gt;", result)
 
 
+class TestRenderInlineEventContactResolution(unittest.TestCase):
+    def test_intended_word_ai_shows_role_and_word(self):
+        msg = _msg(role="playerA", text="snake", event_type="intended-word")
+        result = render.render_inline_event(msg, "en")
+        self.assertIn("🔵", result)
+        self.assertIn("Player A (LLM)", result)
+        self.assertIn(": snake", result)
+
+    def test_partner_guess_ai_shows_role_and_word(self):
+        msg = _msg(role="playerB", text="cobra", event_type="partner-guess")
+        result = render.render_inline_event(msg, "en")
+        self.assertIn("🟢", result)
+        self.assertIn("Player B (LLM)", result)
+        self.assertIn(": cobra", result)
+
+    def test_intended_word_human_shows_you(self):
+        msg = _msg(role="playerA", text="snake", event_type="intended-word")
+        result = render.render_inline_event(msg, "en", human_role="playerA")
+        self.assertIn("You", result)
+        self.assertIn(": snake", result)
+        self.assertNotIn("(LLM)", result)
+
+    def test_intended_word_human_shows_vy_in_russian(self):
+        msg = _msg(role="playerA", text="змей", event_type="intended-word")
+        result = render.render_inline_event(msg, "ru", human_role="playerA")
+        self.assertIn("Вы", result)
+        self.assertIn("змей", result)
+        self.assertNotIn("(LLM)", result)
+
+    def test_intended_word_human_uses_display_name(self):
+        msg = _msg(role="playerA", text="snake", event_type="intended-word")
+        result = render.render_inline_event(msg, "en", human_role="playerA", display_name="Alice")
+        self.assertIn("Alice", result)
+        self.assertIn(": snake", result)
+        self.assertNotIn("You", result)
+
+    def test_partner_guess_ai_when_human_is_actor(self):
+        # When human is playerA (actor), partner (playerB) is always LLM
+        msg = _msg(role="playerB", text="cobra", event_type="partner-guess")
+        result = render.render_inline_event(msg, "en", human_role="playerA")
+        self.assertIn("Player B (LLM)", result)
+
+    def test_partner_guess_human_playerA_as_partner(self):
+        # When human is playerA and they are the partner responding to playerB's clue
+        msg = _msg(role="playerA", text="cobra", event_type="partner-guess")
+        result = render.render_inline_event(msg, "en", human_role="playerA")
+        self.assertIn("You", result)
+        self.assertNotIn("(LLM)", result)
+
+    def test_contact_resolution_is_italic(self):
+        msg = _msg(role="playerA", text="snake", event_type="intended-word")
+        result = render.render_inline_event(msg, "en")
+        self.assertTrue(result.startswith("<i>"))
+        self.assertTrue(result.endswith("</i>"))
+
+    def test_word_is_html_escaped(self):
+        msg = _msg(role="playerA", text="<inject>", event_type="intended-word")
+        result = render.render_inline_event(msg, "en")
+        self.assertNotIn("<inject>", result)
+        self.assertIn("&lt;inject&gt;", result)
+
+    def test_russian_intended_word_llm(self):
+        msg = _msg(role="playerA", text="змея", event_type="intended-word")
+        result = render.render_inline_event(msg, "ru")
+        self.assertIn("Игрок A (LLM)", result)
+        self.assertIn("змея", result)
+
+
 # ---------------------------------------------------------------------------
 # render_system_batch()
 # ---------------------------------------------------------------------------
@@ -212,6 +324,35 @@ class TestRenderSystemBatch(unittest.TestCase):
     def test_single_line(self):
         result = render.render_system_batch(["✅ Contact."])
         self.assertEqual(result, "✅ Contact.")
+
+
+# ---------------------------------------------------------------------------
+# render_prefix_revealed()
+# ---------------------------------------------------------------------------
+
+class TestRenderPrefixRevealed(unittest.TestCase):
+    def test_shows_prefix_en(self):
+        result = render.render_prefix_revealed("CO", "en")
+        self.assertIn("CO", result)
+        self.assertIn("Prefix", result)
+
+    def test_shows_prefix_ru(self):
+        result = render.render_prefix_revealed("КО", "ru")
+        self.assertIn("КО", result)
+        self.assertIn("Префикс", result)
+
+    def test_is_italic(self):
+        result = render.render_prefix_revealed("CO", "en")
+        self.assertIn("<i>", result)
+
+    def test_prefix_is_bold_within_italic(self):
+        result = render.render_prefix_revealed("CO", "en")
+        self.assertIn("<b>CO</b>", result)
+
+    def test_prefix_is_escaped(self):
+        result = render.render_prefix_revealed("<x>", "en")
+        self.assertNotIn("<x>", result)
+        self.assertIn("&lt;x&gt;", result)
 
 
 # ---------------------------------------------------------------------------
@@ -258,13 +399,21 @@ class TestRenderStatus(unittest.TestCase):
         self.assertIn("word19", result)
         self.assertNotIn("word0", result)  # first 5 are dropped
 
+    def test_zero_max_turns_shows_turn_number_without_ratio(self):
+        # maxTurns is 0 only in the brief window before the secret word
+        # (and therefore the attempt limit) is known.
+        state = _state(turnNumber=1, maxTurns=0)
+        result = render.render_status(state, "en")
+        self.assertIn("Turn 1", result)
+        self.assertNotIn("/ 0", result)
+
 
 # ---------------------------------------------------------------------------
 # render_prompt_wm_guess()
 # ---------------------------------------------------------------------------
 
 class TestRenderPromptWmGuess(unittest.TestCase):
-    def test_contains_system_label_and_prefix(self):
+    def test_contains_action_and_prefix(self):
         from backend.app.schemas import PendingUserInput
         state = _state(currentPrefix="CO")
         state.pendingUserInput = PendingUserInput(
@@ -273,10 +422,10 @@ class TestRenderPromptWmGuess(unittest.TestCase):
             currentPrefix="CO", clue="a clever hint", actingPlayer="playerA",
         )
         result = render.render_prompt_wm_guess(state, "en")
-        self.assertIn("<i>[System]</i>", result)
+        self.assertNotIn("[System]", result)
         self.assertIn("<code>CO</code>", result)
 
-    def test_clue_attributed_to_acting_player(self):
+    def test_clue_attributed_to_acting_player_with_llm_suffix(self):
         from backend.app.schemas import PendingUserInput
         state = _state(currentPrefix="CO")
         state.pendingUserInput = PendingUserInput(
@@ -286,7 +435,7 @@ class TestRenderPromptWmGuess(unittest.TestCase):
         )
         result = render.render_prompt_wm_guess(state, "en")
         self.assertIn("🟢", result)
-        self.assertIn("<b>Player B</b>", result)
+        self.assertIn("<b>Player B (LLM)</b>", result)
         self.assertIn("<blockquote>tricky clue here</blockquote>", result)
 
     def test_clue_without_acting_player_uses_generic_label(self):
@@ -325,7 +474,7 @@ class TestRenderPromptWmGuess(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRenderPromptPartnerGuess(unittest.TestCase):
-    def test_shows_clue_attributed_to_player_b(self):
+    def test_shows_clue_attributed_to_player_b_with_llm_suffix(self):
         from backend.app.schemas import PendingUserInput
         state = _state(currentPrefix="CO")
         state.pendingUserInput = PendingUserInput(
@@ -335,9 +484,10 @@ class TestRenderPromptPartnerGuess(unittest.TestCase):
         )
         result = render.render_prompt_partner_guess(state, "en")
         self.assertIn("🟢", result)
+        self.assertIn("<b>Player B (LLM)</b>", result)
         self.assertIn("<blockquote>Player B's mysterious clue</blockquote>", result)
         self.assertIn("<code>CO</code>", result)
-        self.assertIn("<i>[System]</i>", result)
+        self.assertNotIn("[System]", result)
 
 
 # ---------------------------------------------------------------------------
@@ -345,18 +495,18 @@ class TestRenderPromptPartnerGuess(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRenderPromptPlayerMove(unittest.TestCase):
-    def test_shows_system_label_and_prefix(self):
+    def test_shows_action_and_prefix(self):
         state = _state(currentPrefix="CO")
         state.pendingUserInput = None
         result = render.render_prompt_player_move(state, "en")
-        self.assertIn("<i>[System]</i>", result)
+        self.assertNotIn("[System]", result)
         self.assertIn("<code>CO</code>", result)
 
     def test_russian(self):
         state = _state(currentPrefix="К", language="ru")
         state.pendingUserInput = None
         result = render.render_prompt_player_move(state, "ru")
-        self.assertIn("<i>[Система]</i>", result)
+        self.assertNotIn("[Система]", result)
         self.assertIn("<code>К</code>", result)
 
 
@@ -368,12 +518,13 @@ class TestRenderGameOver(unittest.TestCase):
     def test_players_win(self):
         state = _state(
             winner="players", secretWord="collect",
-            turnNumber=7, usedWords=["snake", "core", "collect"],
+            turnNumber=7, maxTurns=18, usedWords=["snake", "core", "collect"],
             status="finished",
         )
         result = render.render_game_over(state, "en")
         self.assertIn("collect", result)
         self.assertIn("7", result)  # turn number
+        self.assertIn("7/18", result)  # attempts used / max attempts
 
     def test_wm_wins(self):
         state = _state(
@@ -424,17 +575,18 @@ class TestIsHumanOrigin(unittest.TestCase):
         msg = _msg(role="playerA", event_type="clue")
         self.assertTrue(render.is_human_origin(msg, "playerA"))
 
-    def test_playerA_intended_word_suppressed_when_human_is_playerA(self):
-        msg = _msg(role="playerA", event_type="intended-word")
-        self.assertTrue(render.is_human_origin(msg, "playerA"))
-
-    def test_playerA_partner_guess_suppressed_when_human_is_playerA(self):
-        msg = _msg(role="playerA", event_type="partner-guess")
-        self.assertTrue(render.is_human_origin(msg, "playerA"))
-
     def test_wm_guess_suppressed_when_human_is_wordMaster(self):
         msg = _msg(role="wordMaster", event_type="master-guess")
         self.assertTrue(render.is_human_origin(msg, "wordMaster"))
+
+    def test_playerA_intended_word_not_suppressed_when_human_is_playerA(self):
+        # Contact resolution events are always rendered (with "You" label)
+        msg = _msg(role="playerA", event_type="intended-word")
+        self.assertFalse(render.is_human_origin(msg, "playerA"))
+
+    def test_playerA_partner_guess_not_suppressed_when_human_is_playerA(self):
+        msg = _msg(role="playerA", event_type="partner-guess")
+        self.assertFalse(render.is_human_origin(msg, "playerA"))
 
     def test_playerB_clue_shown_when_human_is_playerA(self):
         msg = _msg(role="playerB", event_type="clue")
@@ -487,13 +639,16 @@ class TestTruncatePlain(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRenderSystemText(unittest.TestCase):
-    def test_has_italic_label_and_body_on_next_line(self):
+    def test_no_system_label(self):
         result = render.render_system_text("Please wait a moment.", "en")
-        self.assertEqual(result, "<i>[System]</i>\nPlease wait a moment.")
+        self.assertNotIn("[System]", result)
+        self.assertNotIn("[Система]", result)
+        self.assertIn("Please wait a moment.", result)
 
-    def test_russian_label(self):
+    def test_russian_no_label(self):
         result = render.render_system_text("Подождите немного.", "ru")
-        self.assertEqual(result, "<i>[Система]</i>\nПодождите немного.")
+        self.assertNotIn("[Система]", result)
+        self.assertIn("Подождите немного.", result)
 
     def test_body_is_html_escaped(self):
         result = render.render_system_text("<b>inject</b> & run", "en")

@@ -24,6 +24,8 @@ system: |
   That field contains every previous visible step in this current game session, in chronological order.
   Use all previous steps to infer player habits, repeated clue styles, already tested associations, and recent contact outcomes.
 
+  $common_clue_safety
+
   You must always guess exactly one concrete word.
   Your guess must be an existing common singular noun in normal dictionary form, not an adjective, verb, proper noun, plural form, or phrase.
   The JSON object must contain exactly two keys: "guess" and "confidence".

@@ -128,6 +128,7 @@ function App() {
             secretWord={game.secretWord}
             currentPrefix={game.currentPrefix}
             turnNumber={game.turnNumber}
+            maxTurns={game.maxTurns}
           />
           <Timeline
             labels={visibleLabels}

@@ -5,9 +5,13 @@ type GameStatsProps = {
   secretWord: string;
   currentPrefix: string;
   turnNumber: number;
+  maxTurns: number;
 };
 
-export function GameStats({ labels, secretWord, currentPrefix, turnNumber }: GameStatsProps) {
+export function GameStats({ labels, secretWord, currentPrefix, turnNumber, maxTurns }: GameStatsProps) {
+  // maxTurns is 0 until the secret word is known (briefly, while the Word
+  // Master is choosing it) — show just the turn number until then.
+  const turnDisplay = maxTurns > 0 ? `${turnNumber} / ${maxTurns}` : `${turnNumber}`;
   return (
     <div className="chat-status" aria-label="Game status">
       <div className="chat-stat secret-chat-stat">
@@ -20,7 +24,7 @@ export function GameStats({ labels, secretWord, currentPrefix, turnNumber }: Gam
       </div>
       <div className="chat-stat turn-chat-stat">
         <span>{labels.turn}</span>
-        <strong>{turnNumber}</strong>
+        <strong>{turnDisplay}</strong>
       </div>
     </div>
   );

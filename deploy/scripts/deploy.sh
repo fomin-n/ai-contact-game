@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Deploy ai-contact-game Telegram bot to the production VPS.
 # Usage: ./deploy/scripts/deploy.sh
-# Requires: SSH key at ~/.ssh/vps_glados_ed25519, server at 65.109.139.84
+# Requires: an SSH key and a reachable server. Override via the SERVER/SSH_KEY/APP_DIR
+# env vars below — set them in your local shell or a local untracked .env-style file,
+# never hardcode real values here.
 
 set -euo pipefail
 
-SERVER="${SERVER:-glados@65.109.139.84}"
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/vps_glados_ed25519}"
+SERVER="${SERVER:-user@your-server}"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"
 APP_DIR="${APP_DIR:-/opt/ai-contact-game}"
 SERVICE_NAME="ai-contact-game"
 REPO_URL="${REPO_URL:-$(git remote get-url origin 2>/dev/null || echo '')}"
@@ -92,4 +94,4 @@ echo "  sudo systemctl status ai-contact-game"
 echo "  sudo journalctl -u ai-contact-game -f"
 echo "  sudo systemctl restart ai-contact-game"
 echo "  sudo systemctl stop ai-contact-game"
-echo "  cd /opt/ai-contact-game && git pull && sudo systemctl restart ai-contact-game"
+echo "  cd $APP_DIR && git pull && sudo systemctl restart ai-contact-game"

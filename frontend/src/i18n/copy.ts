@@ -9,7 +9,7 @@ export const rulesCopy = {
       "Players give cryptic clues for other words that start with the current revealed prefix.",
       "The Word Master tries to intercept the clue by guessing that word first.",
       "If the partner understands the clue and both player words match, contact succeeds and the next secret-word letter is revealed.",
-      "The players win when they explicitly name the secret word. The Word Master wins if the turn limit is reached."
+      "The players win when they explicitly name the secret word. The maximum number of attempts is fixed once the secret word is known: three attempts for every letter after the first (already-revealed) one. The Word Master wins if that limit is reached."
     ],
     close: "Close"
   },
@@ -25,8 +25,10 @@ export const rulesCopy = {
       "Ведущий пытается перехватить подсказку и первым угадать это слово.",
       "Если второй игрок понял подсказку и слова игроков совпали, " +
         "контакт состоялся и открывается следующая буква секретного слова.",
-      "Игроки побеждают, если называют секретное слово. Ведущий побеждает, " +
-        "если закончились ходы."
+      "Игроки побеждают, если называют секретное слово. Максимальное число попыток " +
+        "определяется после выбора секретного слова: по три попытки на каждую букву, " +
+        "кроме первой (она открывается сразу). Ведущий побеждает, если этот лимит " +
+        "достигнут."
     ],
     close: "Закрыть"
   }

@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=glados
+# Replace with your actual deploy user if different.
+User=ai-contact-game
 WorkingDirectory=/opt/ai-contact-game
 EnvironmentFile=/opt/ai-contact-game/.env
 ExecStart=/opt/ai-contact-game/.venv/bin/python -m backend.telegram.bot

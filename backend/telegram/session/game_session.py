@@ -56,6 +56,7 @@ class GameSession:
         # Rendering state
         self._status_msg_id: int | None = None
         self._system_buffer: list[str] = []
+        self._display_name: str = ""
 
     def start_monitor(self) -> None:
         if self._monitor_task and not self._monitor_task.done():
@@ -127,22 +128,31 @@ class GameSession:
         if category == "suppress":
             return
 
-        # The human's own input is already visible as their sent message in Telegram.
-        if render.is_human_origin(msg, self.human_role):
-            return
-
         if category == "dialogue":
+            # Human's own dialogue (clue, WM guess) is already visible as their sent Telegram message.
+            if render.is_human_origin(msg, self.human_role):
+                return
             await self._flush_system_buffer()
-            await self._send_html(render.render_dialogue(msg, self.language))
+            await self._send_html(render.render_dialogue(msg, self.language, human_role=self.human_role))
             return
 
         if category == "status":
             await self._flush_system_buffer()
             await self._send_or_edit_status(snapshot)
+            # Also show the new prefix inline so it's always visible in the chat flow after contact.
+            prefix = (msg.metadata or {}).get("prefix", "")
+            if prefix:
+                self._system_buffer.append(render.render_prefix_revealed(prefix, self.language))
             return
 
-        # "inline" or "unknown": accumulate for batching
-        self._system_buffer.append(render.render_inline_event(msg, self.language))
+        # "inline" — accumulate for batching.
+        # Human-origin intended-word / partner-guess are NOT suppressed: the contact
+        # resolution display shows every participant's word with a proper role label.
+        self._system_buffer.append(render.render_inline_event(
+            msg, self.language,
+            human_role=self.human_role,
+            display_name=self._display_name,
+        ))
 
     async def _flush_system_buffer(self) -> None:
         if not self._system_buffer:

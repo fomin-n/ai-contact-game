@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from .event_log import write_event
 from .prompt_loader import RenderedPrompt, render_prompt
 from .providers.base import LLMProvider
-from .providers.http_json import MissingApiKeyError, ProviderCapacityError
+from .providers.http_json import MissingApiKeyError, ProviderCapacityError, ProviderCircuitOpenError
 from .schemas import AgentModelConfig, MasterGuess, PartnerGuess, PlayerMove, PlayerRole, SecretWord
 from .word_utils import (
     clue_mentions_word,
@@ -56,7 +56,7 @@ class LLMValidationError(LLMGameError):
 
 
 def _format_exception(error: Exception) -> str:
-    if isinstance(error, ProviderCapacityError):
+    if isinstance(error, (ProviderCapacityError, ProviderCircuitOpenError)):
         return str(error)
     if isinstance(error, httpx.HTTPStatusError):
         return str(error)
@@ -225,6 +225,31 @@ async def _with_repair(
                 model=model,
                 temperature=prompt.temperature,
             )
+        except ProviderCircuitOpenError as error:
+            # The breaker is already open for this provider — retrying here would
+            # just waste the backoff delay for a call we already know will fail.
+            # Fail fast on the very first attempt instead of burning through
+            # MAX_LLM_ATTEMPTS. This funnels into the same LLMGameError the rest
+            # of the system already knows how to handle (gracefully for
+            # word-master-guess, fatally everywhere else — unchanged).
+            last_error = _format_exception(error)
+            write_event(
+                "llm_circuit_open",
+                taskName=task_name,
+                promptId=prompt.id,
+                promptVersion=prompt.version,
+                provider=provider.name,
+                model=model,
+                attemptNumber=attempt + 1,
+                error=error,
+            )
+            _llm_event(_span, "llm.circuit_open", {"attempt": attempt + 1, "error": last_error[:200]})
+            try:
+                _span.set_attribute("llm.success", False)
+                _span.set_status(_OtelStatus(_OtelStatusCode.ERROR, last_error[:200]))
+            except Exception:
+                pass
+            raise LLMGameError(f"{task_name} failed: {last_error}") from error
         except ProviderCapacityError as error:
             api_failed = True
             last_error = _format_exception(error)

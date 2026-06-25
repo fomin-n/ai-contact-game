@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from backend.app import agents
 from backend.app.prompt_loader import RenderedPrompt
 from backend.app.providers.base import LLMProvider
+from backend.app.providers.http_json import ProviderCircuitOpenError
 
 
 class FakeProvider(LLMProvider):
@@ -124,3 +125,42 @@ class LLMRetryTests(IsolatedAsyncioTestCase):
         second_retry_user_message = provider.messages_seen[2][1]["content"]
         self.assertIn('"word": "bad"', second_retry_user_message)
         self.assertIn("same as a previously rejected answer", second_retry_user_message)
+
+    async def test_circuit_open_fails_fast_without_retrying(self) -> None:
+        """When the provider's breaker is open, _with_repair should raise
+        LLMGameError immediately on the first attempt, not burn through
+        MAX_LLM_ATTEMPTS retries with backoff."""
+
+        class CircuitOpenProvider(LLMProvider):
+            name = "fake"
+            display_name = "Fake"
+
+            def __init__(self) -> None:
+                self.call_count = 0
+
+            @property
+            def has_api_key(self) -> bool:
+                return True
+
+            async def chat_json(self, messages, schema=None, model=None, temperature=0.7):
+                self.call_count += 1
+                raise ProviderCircuitOpenError(provider="fake", retry_after_seconds=42)
+
+        provider = CircuitOpenProvider()
+
+        def validate(candidate):
+            return True, candidate, ""
+
+        with patch.object(agents.asyncio, "sleep", new_callable=AsyncMock) as sleep:
+            with self.assertRaises(agents.LLMGameError):
+                await agents._with_repair(
+                    provider=provider,
+                    model="fake-model",
+                    build_prompt=build_test_prompt,
+                    validate=validate,
+                    task_name="Test circuit open",
+                    response_schema={},
+                )
+
+        self.assertEqual(provider.call_count, 1)
+        sleep.assert_not_awaited()

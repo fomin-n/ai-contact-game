@@ -9,7 +9,15 @@ from ...app.schemas import StartGameRequest
 from .. import observability
 from ..i18n import copy as i18n
 from ..session.bot_state import BotState
-from ._helpers import edit_system, get_or_create_session, is_allowed_chat, reply_system, send_system
+from ._helpers import (
+    edit_system,
+    enforce_daily_game_limit,
+    get_or_create_session,
+    get_settings,
+    is_allowed_chat,
+    reply_system,
+    send_system,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +39,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     data = query.data or ""
-    session = await get_or_create_session(user.id, chat.id, context)
+    display_name = user.full_name or user.first_name or ""
+    session = await get_or_create_session(user.id, chat.id, context, display_name=display_name)
 
     if data.startswith("lang:"):
         op = "callback.lang_select"
@@ -111,6 +120,14 @@ async def _handle_role(
 
     if role == "wordMaster":
         await edit_system(query, i18n.get("enter_secret", lang), lang)
+        return
+
+    if not await enforce_daily_game_limit(context, session.user_id):
+        limit = get_settings(context).max_games_per_day_per_user
+        await edit_system(query, i18n.get("daily_game_limit_reached", lang, limit=limit), lang)
+        async with session.lock:
+            session.state = BotState.IDLE
+        observability._event(span, "game.daily_limit_reached", {"role": role})
         return
 
     started_copy_key = "spectator_game_started" if role == "none" else "game_started"

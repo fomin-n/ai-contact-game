@@ -9,7 +9,7 @@ import {
   type StartGameParams,
   type UserInputParams
 } from "../api/gameApi";
-import { DEFAULT_MAX_TURNS, POLLING_INTERVAL_MS } from "../constants/gameConstants";
+import { POLLING_INTERVAL_MS } from "../constants/gameConstants";
 import { createEmptyState, defaultPersonalities, initialProviderInfo } from "../config/defaults";
 import type {
   AgentModelSelection,
@@ -266,8 +266,7 @@ export function useGameController(): UseGameControllerResult {
       playerBPersonality,
       humanRole,
       agentModelSelection,
-      secretWord: humanRole === "playerA" ? undefined : customSecretWord.trim() || undefined,
-      maxTurns: DEFAULT_MAX_TURNS
+      secretWord: humanRole === "playerA" ? undefined : customSecretWord.trim() || undefined
     });
   }
 

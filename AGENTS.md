@@ -244,7 +244,7 @@ To add a prompt version:
 - If any player explicitly calls the secret word, the game ends with players winning.
 - There are no fallback dictionaries or hardcoded candidate words in the repository.
 - If the LLM/provider fails, show an error instead of silently substituting words.
-- `maxTurns` defaults to `50`; reaching it ends the game with Word Master winning.
+- `maxTurns` is computed, not configurable: `(len(secretWord) - 1) * 3` — three contact attempts per letter after the first, already-revealed one. It is `0` until the secret word is known (computed in `GameManager._initialize_secret`, or eagerly in `start()` when the secret is provided up front), and reaching it ends the game with Word Master winning (`finishReason="maxTurns"`). A one-letter secret word has zero remaining letters to guess, so it is special-cased: the game ends immediately as a players' win (`finishReason="fullPrefix"`) rather than running a zero-attempt game. `backend/app/word_utils.py::compute_max_turns` is the single source of truth for the formula.
 
 ## Human Input Flow
 
@@ -313,6 +313,11 @@ Logs include game state, prompts, provider request/response metadata, parsed LLM
 
 `backend/app/event_log.py` redacts known API-key fields, bearer tokens, common key formats, and current provider key environment values before writing logs.
 
+The log file rotates via stdlib `logging.handlers.RotatingFileHandler` (no unbounded growth). Configurable via env vars, all optional with generous defaults:
+- `AI_CONTACT_LOG_MAX_BYTES` (default `20971520`, 20 MiB) — size threshold per file before rotating.
+- `AI_CONTACT_LOG_BACKUP_COUNT` (default `5`) — number of rotated backups kept (`ai-contact-game.jsonl.1` … `.5`), so ~120 MiB max retained.
+- `AI_CONTACT_LOG_MAX_STRING_LENGTH` (default `20000`) — per-string truncation length within a single log record (unrelated to file rotation).
+
 ## Security Notes
 
 - Never commit `.env*`, `.envrc`, runtime logs, `.venv`, `node_modules`, `dist`, private keys, or certificate/key files.
@@ -326,6 +331,11 @@ Logs include game state, prompts, provider request/response metadata, parsed LLM
 - `mistral-medium-latest` has been used successfully for Word Master when `mistral-small-latest` capacity was limited.
 - `gpt-4.1-mini` has been used successfully for Player A and Player B through the OpenAI-compatible provider.
 - There is no artificial delay before visible game-chat messages. Provider latency is the only expected delay.
+- A per-provider circuit breaker (`backend/app/providers/http_json.py::_BREAKER`) trips after a burst of HTTP 429s and short-circuits further calls to that provider for a cooldown window — a generous, hobby-scale safeguard against hammering an already-throttling provider, not a billing control. Configurable, all optional:
+  - `AI_CONTACT_CIRCUIT_BREAKER_FAILURE_THRESHOLD` (default `8`) — 429s within the window before tripping.
+  - `AI_CONTACT_CIRCUIT_BREAKER_WINDOW_SECONDS` (default `90`) — sliding window for counting failures.
+  - `AI_CONTACT_CIRCUIT_BREAKER_COOLDOWN_SECONDS` (default `90`) — how long the breaker stays open once tripped.
+  - When open, calls fail fast with `ProviderCircuitOpenError`, which `agents.py::_with_repair` raises immediately as `LLMGameError` on the first attempt (no wasted retries). This degrades exactly like any other `LLMGameError`: gracefully for the Word-Master-guess step (`master-no-guess`, game continues), fatally everywhere else (visible game-stopped error) — unchanged from existing behavior.
 
 ## Telegram Bot
 
@@ -387,6 +397,18 @@ artificial delay before visible game-chat messages" rule above, which still
 holds for the *engine*; the delay is purely a Telegram message-delivery
 courtesy for spectators.
 
+### Per-user daily game limit
+
+`backend/telegram/usage_store.py::UsageStore` persists a per-user, per-UTC-day
+game-start counter to `AI_CONTACT_TELEGRAM_USAGE_DATA_PATH` (default
+`data/usage.json`), mirroring `auth/store.py`'s atomic-write pattern. This is a
+generous abuse guard, not a billing system — the default limit is
+`AI_CONTACT_TELEGRAM_MAX_GAMES_PER_DAY_PER_USER=50`. Enforced at the only two
+places `session.start_game(...)` is actually called:
+`callbacks.py::_handle_role` (playerA/none) and
+`messages.py::_handle_entering_secret` (wordMaster). On limit hit, the user
+gets a localized message and the session resets to `IDLE`.
+
 ### Concurrency model
 
 Each `GameSession` has an `asyncio.Lock` that protects state machine transitions. The monitor task runs independently and acquires the lock only when changing `self.state`. Handler functions acquire the lock briefly for state read/write, then release it before doing I/O (Telegram API calls, `gm.submit_user_input`). The deduplication guard (`_last_processed_update_id`) prevents double-processing.
@@ -413,15 +435,15 @@ All user text goes through `backend/telegram/safety.py`:
 5. For clues: `word_utils.clue_mentions_word()` check
 6. Rate limiting: 1s cooldown per session
 
-The `clue_safety` block added to `prompts/_common.v1.yaml` instructs all LLM tasks to treat clue text as untrusted player communication that cannot override system rules or response schemas.
+The `clue_safety` block in `prompts/_common.v1.yaml` (referenced as `$common_clue_safety`) instructs every prompt whose payload can carry clue/history text — `generate_player_move`, `word_master_guess`, `guess_partner_word` — to treat that text as untrusted player communication that cannot override system rules or response schemas. `choose_secret_word` does not reference it: it runs before any game messages exist, so no untrusted text ever reaches it. `backend/tests/test_prompt_content.py` enforces that every prompt file is explicitly classified and that classified-`True` tasks actually reference the block, so this can't silently drift again.
 
 ### Observability
 
-Phoenix v17.2.0 runs at `127.0.0.1:6006` (Docker, `nutrition_agent_phoenix_data` volume, compose file at `/opt/nutrition-agent/deploy/phoenix/docker-compose.yml`). The bot sends traces to a separate project `ai-contact-game-bot` using `arize-phoenix-otel`.
+Phoenix v17.2.0 runs at `127.0.0.1:6006` (Docker, on the same VPS — see local ops notes for the compose file path). The bot sends traces to a separate project `ai-contact-game-bot` using `arize-phoenix-otel`.
 
 Access Phoenix UI:
 ```bash
-ssh -L 6006:127.0.0.1:6006 glados@65.109.139.84 -N
+ssh -L 6006:127.0.0.1:6006 user@host -N
 # Open http://localhost:6006 → select "ai-contact-game-bot" project
 ```
 
@@ -429,7 +451,7 @@ User IDs are SHA-256 hashed before export (first 16 hex chars). API keys and tok
 
 ### Deployment
 
-The bot runs as a systemd service on the VPS at `/opt/ai-contact-game/`. It uses the same pattern as `nutrition-agent`.
+The bot runs as a systemd service on the VPS at `/opt/ai-contact-game/`. It uses the standard systemd + git-pull deploy pattern.
 
 Service file: `deploy/systemd/ai-contact-game.service`
 Deploy script: `deploy/scripts/deploy.sh`

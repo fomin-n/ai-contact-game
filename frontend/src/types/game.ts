@@ -106,6 +106,7 @@ export type GameState = {
   pendingUserInput?: PendingUserInput | null;
   currentTurn: PlayerRole;
   turnNumber: number;
+  /** 0 until the secret word is known; then (secretWord length - 1) * 3. */
   maxTurns: number;
   winner?: "players" | "wordMaster";
   finishReason?: string;

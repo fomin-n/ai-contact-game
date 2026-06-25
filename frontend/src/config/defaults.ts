@@ -1,5 +1,4 @@
 import type { GameState, Language, PlayerRole, ProviderInfo } from "../types/game";
-import { DEFAULT_MAX_TURNS } from "../constants/gameConstants";
 
 export const initialProviderInfo: ProviderInfo = {
   provider: "mistral",
@@ -47,7 +46,9 @@ export function createEmptyState(language: Language, providerInfo: ProviderInfo)
     pendingUserInput: null,
     currentTurn: "playerA",
     turnNumber: 1,
-    maxTurns: DEFAULT_MAX_TURNS,
+    // 0 until the secret word is known; the backend computes the real value
+    // as (secretWord length - 1) * 3 once the game starts.
+    maxTurns: 0,
     playerAPersonality: defaultPersonalities[language].playerA,
     playerBPersonality: defaultPersonalities[language].playerB,
     providerInfo

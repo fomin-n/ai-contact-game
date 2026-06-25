@@ -4,10 +4,11 @@ All user/LLM-generated text is passed through `esc()` before embedding in HTML.
 Nothing in this module does I/O or holds state.
 
 Visual language (three tiers, kept visually distinct on purpose):
-  - System (instructions, errors, menus): italic "[System]"/"[Система]" label
-    on its own line, plain (non-bold) body below. Lightest weight.
+  - System (instructions, errors, menus): no label — context makes the role clear.
+    Light italic text for validation messages; plain text for confirmations.
   - Dialogue (an actual clue or guess spoken by a player/Word Master): bold
-    role header with emoji, followed by the utterance in a <blockquote>.
+    role header with emoji and "(LLM)" suffix when AI-controlled, followed by
+    the utterance in a <blockquote>.
   - Outcome (contact made/broken, reveals): single italic line with an emoji,
     no label — compact, no blockquote, sits between the two above in weight.
 Persistent status (turn/prefix/used words) is sent once and edited in place.
@@ -43,6 +44,8 @@ _ROLE_NAME: dict[str, dict[str, str]] = {
         "system": "Игра",
     },
 }
+
+_LLM_SUFFIX: dict[str, str] = {"en": " (LLM)", "ru": " (LLM)"}
 
 # Emoji for inline system events (non-dialogue, non-prefix).
 _EVENT_EMOJI: dict[str, str] = {
@@ -91,28 +94,30 @@ def truncate_plain(text: str, limit: int = TELEGRAM_MAX_MESSAGE_LENGTH) -> str:
     return text[: limit - 1].rstrip() + "…"
 
 
-def _role_header(role: str, lang: str) -> str:
+def _is_llm_role(role: str, human_role: str) -> bool:
+    """Return True when the given role is played by an LLM (not a human)."""
+    return human_role in ("", "none") or role != human_role
+
+
+def _role_header(role: str, lang: str, *, is_llm: bool = True) -> str:
     emoji = _ROLE_EMOJI.get(role, "•")
     names = _ROLE_NAME.get(lang) or _ROLE_NAME["en"]
     name = names.get(role, role)
-    return f"{emoji} <b>{esc(name)}</b>"
+    suffix = _LLM_SUFFIX.get(lang, " (LLM)") if is_llm else ""
+    return f"{emoji} <b>{esc(name + suffix)}</b>"
 
 
-def _system_label(lang: str) -> str:
-    return f"<i>{esc(i18n.get('system_label', lang))}</i>"
+def _dialogue_block(role: str, text: str, lang: str, *, is_llm: bool = True) -> str:
+    return f"{_role_header(role, lang, is_llm=is_llm)}\n<blockquote>{esc(text)}</blockquote>"
 
 
-def _dialogue_block(role: str, text: str, lang: str) -> str:
-    return f"{_role_header(role, lang)}\n<blockquote>{esc(text)}</blockquote>"
-
-
-def render_system_text(text: str, lang: str) -> str:
-    """Wrap a fully-composed system/instructional string with the [System] label.
+def render_system_text(text: str, lang: str) -> str:  # noqa: ARG001
+    """Render a system/instructional string without a role label.
 
     `text` is treated as plain text and HTML-escaped wholesale — callers must
     not pre-embed HTML tags in it (the i18n copy strings never do).
     """
-    return f"{_system_label(lang)}\n{esc(text)}"
+    return f"<i>{esc(text)}</i>"
 
 
 def classify_event(msg: "GameMessage") -> str:
@@ -132,26 +137,55 @@ def classify_event(msg: "GameMessage") -> str:
     return "inline"  # unknown system events shown compactly
 
 
-def render_dialogue(msg: "GameMessage", lang: str) -> str:
-    """Full dialogue message (clue or WM guess): role header + blockquote."""
-    return _dialogue_block(msg.role, msg.text, lang)
+def render_dialogue(msg: "GameMessage", lang: str, human_role: str = "none") -> str:
+    """Full dialogue message (clue or WM guess): role header + blockquote.
+
+    Roles played by an LLM receive a "(LLM)" suffix. The human's own role does not.
+    """
+    is_llm = _is_llm_role(msg.role, human_role)
+    return _dialogue_block(msg.role, msg.text, lang, is_llm=is_llm)
 
 
-def render_inline_event(msg: "GameMessage", lang: str) -> str:  # noqa: ARG001
-    """Single compact, lightweight line for a contact/reveal outcome."""
+def render_inline_event(
+    msg: "GameMessage",
+    lang: str,
+    human_role: str = "none",
+    display_name: str = "",
+) -> str:
+    """Single compact, lightweight line for a contact/reveal outcome.
+
+    For intended-word and partner-guess events, the actor's role and word are
+    shown explicitly.  The human player's word uses their display name (or
+    "You" / "Вы" when no name is available).
+    """
     event_type = (msg.metadata or {}).get("eventType", "")
+
+    if event_type in ("intended-word", "partner-guess"):
+        emoji = _ROLE_EMOJI.get(msg.role, "•")
+        if not _is_llm_role(msg.role, human_role):
+            actor = display_name or ("Вы" if lang == "ru" else "You")
+        else:
+            names = _ROLE_NAME.get(lang) or _ROLE_NAME["en"]
+            suffix = _LLM_SUFFIX.get(lang, " (LLM)")
+            actor = names.get(msg.role, msg.role) + suffix
+        return f"<i>{emoji} {esc(actor)}: {esc(msg.text)}</i>"
+
     emoji = _EVENT_EMOJI.get(event_type) or _ROLE_EMOJI.get(msg.role, "•")
     return f"<i>{emoji} {esc(msg.text)}</i>"
 
 
 def is_human_origin(msg: "GameMessage", human_role: str) -> bool:
-    """Return True when this message echoes the human player's own submitted input.
+    """Return True when this message echoes the human player's own submitted dialogue.
 
-    The game appends a GameMessage for every move regardless of whether it came
-    from an LLM or from human input. Human-originated messages always carry the
-    same role as humanRole, so the role match is the only check needed.
+    Only dialogue messages (clue, master-guess) should be suppressed — the human
+    already sees them as their own Telegram message.  Contact-resolution events
+    (intended-word, partner-guess) are intentionally NOT suppressed so the game
+    can display the human's word with a proper role label.
     """
-    return human_role not in ("", "none") and msg.role == human_role
+    if human_role in ("", "none"):
+        return False
+    event_type = (msg.metadata or {}).get("eventType", "")
+    return msg.role == human_role and event_type in _DIALOGUE_EVENTS
 
 
 def render_system_batch(lines: list[str]) -> str:
@@ -159,9 +193,17 @@ def render_system_batch(lines: list[str]) -> str:
     return "\n".join(lines)
 
 
+def render_prefix_revealed(prefix: str, lang: str) -> str:
+    """Compact inline line showing the newly revealed prefix after contact."""
+    label = i18n.get("status_prefix", lang)
+    return f"<i>🔤 {esc(label)}: <b>{esc(prefix)}</b></i>"
+
+
 def render_status(snapshot: "GameState", lang: str) -> str:
     """Persistent game status block — sent once and edited in-place."""
-    turn = f"{snapshot.turnNumber} / {snapshot.maxTurns}"
+    # maxTurns is 0 only in the brief window before the secret word (and
+    # therefore the attempt limit) is known.
+    turn = f"{snapshot.turnNumber} / {snapshot.maxTurns}" if snapshot.maxTurns > 0 else f"{snapshot.turnNumber}"
     lines = [
         f"🎮 <b>{esc(i18n.get('status_game_name', lang))}</b>  ·  "
         f"{esc(i18n.get('status_turn', lang))} {turn}",
@@ -177,9 +219,12 @@ def render_status(snapshot: "GameState", lang: str) -> str:
 
 
 def _clue_block(actor: str | None, clue: str, lang: str) -> str:
-    """Render a received clue: actual speaker's header when known, else a generic label."""
+    """Render a received clue: actual speaker's header when known, else a generic label.
+
+    The actor is always an LLM in prompt contexts (human can never be the other player).
+    """
     if actor:
-        header = _role_header(actor, lang)
+        header = _role_header(actor, lang, is_llm=True)
     else:
         header = f"📨 <b>{esc(i18n.get('prompt_clue_label', lang))}</b>"
     return f"{header}\n<blockquote>{esc(clue)}</blockquote>"
@@ -193,7 +238,7 @@ def render_prompt_wm_guess(snapshot: "GameState", lang: str) -> str:
     if pending and pending.clue:
         parts.append(_clue_block(pending.actingPlayer, pending.clue, lang))
     action = esc(i18n.get("prompt_wm_guess_label", lang))
-    parts.append(f"{_system_label(lang)}\n{action} (<code>{prefix}</code>):")
+    parts.append(f"{action} (<code>{prefix}</code>):")
     return "\n\n".join(parts)
 
 
@@ -201,7 +246,7 @@ def render_prompt_player_move(snapshot: "GameState", lang: str) -> str:
     """Input prompt for Player A: step 1 — enter the intended word."""
     prefix = esc(snapshot.currentPrefix)
     action = esc(i18n.get("prompt_player_move_label", lang))
-    return f"{_system_label(lang)}\n{action} (<code>{prefix}</code>):"
+    return f"{action} (<code>{prefix}</code>):"
 
 
 def render_prompt_partner_guess(snapshot: "GameState", lang: str) -> str:
@@ -212,7 +257,7 @@ def render_prompt_partner_guess(snapshot: "GameState", lang: str) -> str:
     if pending and pending.clue:
         parts.append(_clue_block(pending.actingPlayer, pending.clue, lang))
     action = esc(i18n.get("prompt_partner_guess_label", lang))
-    parts.append(f"{_system_label(lang)}\n{action} (<code>{prefix}</code>):")
+    parts.append(f"{action} (<code>{prefix}</code>):")
     return "\n\n".join(parts)
 
 
@@ -231,6 +276,7 @@ def render_game_over(snapshot: "GameState", lang: str) -> str:
     stats = i18n.get(
         "game_over_stats", lang,
         turns=snapshot.turnNumber,
+        max_turns=snapshot.maxTurns,
         used=len(snapshot.usedWords),
     )
     return f"<b>{header}</b>\n<i>{stats}</i>"

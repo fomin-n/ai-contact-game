@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
+import logging.handlers
 import os
 import re
-import threading
 import time
 import traceback
 from datetime import UTC, datetime
@@ -14,6 +15,8 @@ from typing import Any
 LOG_DIR = Path(__file__).resolve().parents[2] / "logs"
 LOG_FILE = LOG_DIR / "ai-contact-game.jsonl"
 MAX_STRING_LENGTH = int(os.getenv("AI_CONTACT_LOG_MAX_STRING_LENGTH", "20000"))
+MAX_LOG_BYTES = int(os.getenv("AI_CONTACT_LOG_MAX_BYTES", str(20 * 1024 * 1024)))
+LOG_BACKUP_COUNT = int(os.getenv("AI_CONTACT_LOG_BACKUP_COUNT", "5"))
 REDACTED = "[REDACTED]"
 SENSITIVE_KEY_NAMES = {
     "apikey",
@@ -36,7 +39,21 @@ SECRET_ENV_NAMES = (
     "AI_API_KEY",
 )
 
-_lock = threading.Lock()
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+# A dedicated, non-propagating logger backed by a RotatingFileHandler. The
+# handler already serializes concurrent writes internally (its own lock), so
+# no extra locking is needed here. The formatter emits only the raw JSONL
+# line — no timestamps/levels added — so on-disk format is unchanged.
+_event_logger = logging.getLogger("ai_contact.event_log")
+_event_logger.setLevel(logging.INFO)
+_event_logger.propagate = False
+if not _event_logger.handlers:
+    _handler = logging.handlers.RotatingFileHandler(
+        LOG_FILE, maxBytes=MAX_LOG_BYTES, backupCount=LOG_BACKUP_COUNT, encoding="utf-8"
+    )
+    _handler.setFormatter(logging.Formatter("%(message)s"))
+    _event_logger.addHandler(_handler)
 
 
 def _is_sensitive_key(key: object) -> bool:
@@ -102,7 +119,6 @@ def to_loggable(value: Any) -> Any:
 
 
 def write_event(event_type: str, **payload: Any) -> None:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
     record = {
         "ts": datetime.now(UTC).isoformat(),
         "time": time.time(),
@@ -110,6 +126,4 @@ def write_event(event_type: str, **payload: Any) -> None:
         **to_loggable(payload),
     }
     line = json.dumps(record, ensure_ascii=False, sort_keys=True)
-    with _lock:
-        with LOG_FILE.open("a", encoding="utf-8") as handle:
-            handle.write(line + "\n")
+    _event_logger.info(line)

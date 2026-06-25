@@ -32,7 +32,7 @@ from .schemas import (
     StartGameRequest,
     UserInputRequest,
 )
-from .word_utils import first_letters, is_valid_word, normalize_word, same_word
+from .word_utils import compute_max_turns, first_letters, is_valid_word, normalize_word, same_word
 
 COPY = {
     "en": {
@@ -50,7 +50,7 @@ COPY = {
         "wordMasterNoGuess": "Word Master couldn't guess.",
         "wordMasterDecodedBlockedReason": "Word Master decoded this clue and blocked contact.",
         "gameOver": "Game over.",
-        "maxTurns": "Max turns reached.",
+        "maxTurns": "Maximum number of attempts reached.",
         "playersFound": "Players found the secret word.",
         "fullPrefix": "The full secret word has been revealed.",
         "apiError": "Game stopped because the backend game loop failed.",
@@ -67,7 +67,7 @@ COPY = {
         "invalidCustomSecret": "Custom secret word must be one valid single word for the selected language.",
         "usedWordsFinal": "Used words:",
         "secretFinal": "Secret word:",
-        "turnsFinal": "Turns:",
+        "turnsFinal": "Attempts:",
         "winnerFinal": "Winner:",
         "wordMasterGuessPrompt": "Word Master, guess the encoded word.",
         "wordMasterGuessPlaceholder": "Enter your guess...",
@@ -91,7 +91,7 @@ COPY = {
         "wordMasterNoGuess": "Ведущий не догадался.",
         "wordMasterDecodedBlockedReason": "Ведущий расшифровал подсказку и оборвал контакт.",
         "gameOver": "Игра окончена.",
-        "maxTurns": "Достигнут лимит ходов.",
+        "maxTurns": "Достигнут лимит попыток.",
         "playersFound": "Игроки нашли секретное слово.",
         "fullPrefix": "Секретное слово открыто полностью.",
         "apiError": "Игра остановилась из-за ошибки игрового цикла на сервере.",
@@ -108,7 +108,7 @@ COPY = {
         "invalidCustomSecret": "Пользовательское секретное слово должно быть одним допустимым словом для выбранного языка.",
         "usedWordsFinal": "Использованные слова:",
         "secretFinal": "Секретное слово:",
-        "turnsFinal": "Ходов:",
+        "turnsFinal": "Попыток:",
         "winnerFinal": "Победитель:",
         "wordMasterGuessPrompt": "Ведущий, угадайте зашифрованное слово.",
         "wordMasterGuessPlaceholder": "Введите догадку...",
@@ -180,7 +180,6 @@ class GameManager:
                 language=request.language,
                 player_a_personality=request.playerAPersonality,
                 player_b_personality=request.playerBPersonality,
-                max_turns=request.maxTurns,
                 human_role=request.humanRole,
                 provider_info=run_provider_info,
             )
@@ -189,6 +188,7 @@ class GameManager:
                 self._state.secretWord = provided_secret
                 self._state.currentPrefix = first_letters(provided_secret, 1)
                 self._state.revealedLength = 1
+                self._state.maxTurns = compute_max_turns(provided_secret)
             state = self._client_state(self._state)
         write_event(
             "game_start",
@@ -212,7 +212,6 @@ class GameManager:
                 language=previous.language,
                 player_a_personality=previous.playerAPersonality,
                 player_b_personality=previous.playerBPersonality,
-                max_turns=previous.maxTurns,
                 human_role=previous.humanRole,
                 provider_info=previous.providerInfo,
             )
@@ -284,14 +283,12 @@ class GameManager:
         language: str,
         player_a_personality: str,
         player_b_personality: str,
-        max_turns: int = 50,
         human_role: HumanRole = "none",
         provider_info: ProviderInfo | None = None,
     ) -> GameState:
         return GameState(
             language=language,
             humanRole=human_role,
-            maxTurns=max_turns,
             playerAPersonality=player_a_personality,
             playerBPersonality=player_b_personality,
             providerInfo=provider_info or self.provider_info,
@@ -497,7 +494,7 @@ class GameManager:
                 labels["gameOver"],
                 f"{labels['winnerFinal']} {winner}.",
                 f"{labels['secretFinal']} {state.secretWord}.",
-                f"{labels['turnsFinal']} {state.turnNumber}.",
+                f"{labels['turnsFinal']} {state.turnNumber}/{state.maxTurns}.",
                 f"{labels['usedWordsFinal']} {', '.join(state.usedWords) or '-'}",
             ]
         )
@@ -612,6 +609,7 @@ class GameManager:
             )
             secret_word = normalize_word(secret_result["word"], state.language)
         current_prefix = first_letters(secret_word, 1)
+        max_turns = compute_max_turns(secret_word)
         labels = COPY[state.language]
         write_event(
             "secret_word_chosen",
@@ -620,12 +618,14 @@ class GameManager:
             rawResult=secret_result,
             secretWord=secret_word,
             prefix=current_prefix,
+            maxTurns=max_turns,
         )
 
         def initialize(next_state: GameState) -> None:
             next_state.secretWord = secret_word
             next_state.currentPrefix = current_prefix
             next_state.revealedLength = 1
+            next_state.maxTurns = max_turns
 
         if not await self._mutate(run_id, initialize):
             return
@@ -641,6 +641,18 @@ class GameManager:
             f"{labels['prefix']} {current_prefix}",
             {"eventType": "prefix", "prefix": current_prefix},
         )
+
+        if len(secret_word) <= 1:
+            # A one-letter secret word is already fully revealed by the
+            # initial prefix — there are no remaining letters to establish
+            # contact over, so the game ends immediately as a players' win
+            # rather than running a zero-attempt game.
+            await self._finish(
+                run_id,
+                winner="players",
+                reason="fullPrefix",
+                text=labels["fullPrefix"],
+            )
 
     async def _play_turn(self, run_id: int) -> None:
         state = await self._snapshot()

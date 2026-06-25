@@ -11,7 +11,13 @@ from .. import observability
 from ..i18n import copy as i18n
 from ..safety import MAX_CLUE_LENGTH, sanitize_text, validate_clue_input, validate_word_input
 from ..session.bot_state import BotState
-from ._helpers import get_or_create_session, is_allowed_chat, reply_system
+from ._helpers import (
+    enforce_daily_game_limit,
+    get_or_create_session,
+    get_settings,
+    is_allowed_chat,
+    reply_system,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +34,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await reply_system(update.message, i18n.get("private_only"), "en")
         return
 
-    session = await get_or_create_session(user.id, chat.id, context)
+    display_name = user.full_name or user.first_name or ""
+    session = await get_or_create_session(user.id, chat.id, context, display_name=display_name)
 
     async with observability.span_for_update("text_message", update, session=session) as span:
         text = update.message.text.strip()
@@ -53,7 +60,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         observability._safe(span.set_attribute, "game.bot_state", state.name)
 
         if state == BotState.ENTERING_SECRET:
-            await _handle_entering_secret(session, text, update, span)
+            await _handle_entering_secret(session, text, update, context, span)
         elif state == BotState.WAITING_WM_GUESS:
             await _handle_wm_guess(session, text, update, span)
         elif state == BotState.WAITING_INTENDED_WORD:
@@ -67,7 +74,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             observability._event(span, "unexpected_state", {"state": state.name})
 
 
-async def _handle_entering_secret(session, text: str, update: Update, span=None) -> None:
+async def _handle_entering_secret(session, text: str, update: Update, context, span=None) -> None:
     lang = session.language
 
     word, err = validate_word_input(text, lang, "", [])
@@ -75,6 +82,14 @@ async def _handle_entering_secret(session, text: str, update: Update, span=None)
         hint = i18n.get("lang_hint_ru" if lang == "ru" else "lang_hint_en", lang)
         await reply_system(update.message, _word_error_message(err, lang, prefix="", hint=hint), lang)
         observability.record_validation_failure(span, "secret_word", err)
+        return
+
+    if not await enforce_daily_game_limit(context, session.user_id):
+        limit = get_settings(context).max_games_per_day_per_user
+        await reply_system(update.message, i18n.get("daily_game_limit_reached", lang, limit=limit), lang)
+        async with session.lock:
+            session.state = BotState.IDLE
+        observability._event(span, "game.daily_limit_reached", {"role": "wordMaster"})
         return
 
     request = StartGameRequest(

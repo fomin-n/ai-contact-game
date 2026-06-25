@@ -106,7 +106,9 @@ class GameState(BaseModel):
     pendingUserInput: PendingUserInput | None = None
     currentTurn: PlayerRole = "playerA"
     turnNumber: int = 1
-    maxTurns: int = 50
+    # 0 until the secret word is known; then (len(secretWord) - 1) * 3 —
+    # three contact attempts per letter after the already-revealed first one.
+    maxTurns: int = 0
     winner: Literal["players", "wordMaster"] | None = None
     finishReason: str | None = None
     playerAPersonality: str = ""
@@ -121,7 +123,6 @@ class StartGameRequest(BaseModel):
     humanRole: HumanRole = "none"
     agentModelSelection: AgentModelSelection | None = None
     secretWord: str | None = None
-    maxTurns: int = Field(default=50, ge=1, le=200)
 
 
 class UserInputRequest(BaseModel):

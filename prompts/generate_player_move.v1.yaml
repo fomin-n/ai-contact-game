@@ -24,6 +24,7 @@ system: |
   That field contains every previous visible step in this current game session, in chronological order, with the secret word redacted for players.
   Use that full session context to avoid repeating failed associations and to build clues your partner is more likely to understand.
 
+  $common_clue_safety
   $common_player_strategy_context
   Before writing the clue, inspect wordMasterDecodedExamples from the user JSON.
   Treat every item there as a negative example of a clue strategy the Word Master already decoded.

@@ -20,6 +20,7 @@ system: |
   Use that full session context to understand prior clues, guesses, contact outcomes, failed associations, and your partner's style.
   Your partner is trying to encode the word indirectly so you can infer it before the Word Master can.
 
+  $common_clue_safety
   $common_player_strategy_context
   If wordMasterDecodedExamples is present in the user JSON, treat it as highlighted negative context.
   Your partner may now be using a different strategy than those failed examples to avoid interception.

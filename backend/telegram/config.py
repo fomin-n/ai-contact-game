@@ -16,6 +16,8 @@ class TelegramBotSettings:
         phoenix_collector_endpoint: str,
         auth_data_path: Path,
         ai_spectator_message_delay_seconds: float,
+        usage_data_path: Path,
+        max_games_per_day_per_user: int,
     ) -> None:
         self.bot_token = bot_token
         self.session_ttl_seconds = session_ttl_seconds
@@ -26,6 +28,8 @@ class TelegramBotSettings:
         self.phoenix_collector_endpoint = phoenix_collector_endpoint
         self.auth_data_path = auth_data_path
         self.ai_spectator_message_delay_seconds = ai_spectator_message_delay_seconds
+        self.usage_data_path = usage_data_path
+        self.max_games_per_day_per_user = max_games_per_day_per_user
 
     @classmethod
     def from_env(cls) -> "TelegramBotSettings":
@@ -52,5 +56,11 @@ class TelegramBotSettings:
             ),
             ai_spectator_message_delay_seconds=float(
                 os.getenv("AI_CONTACT_TELEGRAM_AI_SPECTATOR_MESSAGE_DELAY_SECONDS", "1.5")
+            ),
+            usage_data_path=Path(
+                os.getenv("AI_CONTACT_TELEGRAM_USAGE_DATA_PATH", "data/usage.json")
+            ),
+            max_games_per_day_per_user=int(
+                os.getenv("AI_CONTACT_TELEGRAM_MAX_GAMES_PER_DAY_PER_USER", "50")
             ),
         )

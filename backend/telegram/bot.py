@@ -21,13 +21,16 @@ from .handlers.commands import (
 from .handlers.messages import handle_text
 from .observability import setup_tracing
 from .session.registry import SessionRegistry
+from .usage_store import UsageStore
 
 
 async def _post_init(application: Application) -> None:  # type: ignore[type-arg]
     registry: SessionRegistry = application.bot_data["registry"]
     auth_store: AuthStore = application.bot_data["auth_store"]
+    usage_store: UsageStore = application.bot_data["usage_store"]
     await registry.start()
     await auth_store.load()
+    await usage_store.load()
 
 
 async def _post_shutdown(application: Application) -> None:  # type: ignore[type-arg]
@@ -41,6 +44,7 @@ def build_application() -> Application:  # type: ignore[type-arg]
 
     registry = SessionRegistry(settings)
     auth_store = AuthStore(settings.auth_data_path)
+    usage_store = UsageStore(settings.usage_data_path)
 
     app = (
         Application.builder()
@@ -52,6 +56,7 @@ def build_application() -> Application:  # type: ignore[type-arg]
     app.bot_data["registry"] = registry
     app.bot_data["settings"] = settings
     app.bot_data["auth_store"] = auth_store
+    app.bot_data["usage_store"] = usage_store
 
     # Group -1: authentication gate — runs before all game handlers.
     app.add_handler(TypeHandler(Update, auth_gate), group=-1)

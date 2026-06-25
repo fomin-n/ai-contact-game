@@ -289,3 +289,120 @@ class HumanModeTests(IsolatedAsyncioTestCase):
             self.assertNotIn("library", state.usedWords)
         finally:
             await manager.reset()
+
+    async def test_word_master_circuit_open_continues_to_partner_guess(self) -> None:
+        """A tripped provider circuit breaker must degrade exactly like exhausted
+        retries: master-no-guess -> failed-intercept -> game continues, not abort.
+
+        secretWord/intendedWord/guess are all "carrot" so the game finishes
+        cleanly (players found the secret) within a single turn, avoiding the
+        need for a second turn's worth of queued provider responses.
+        """
+        from backend.app.providers.http_json import ProviderCircuitOpenError
+
+        class CircuitOpenProvider(QueueProvider):
+            async def chat_json(self, messages, schema=None, model=None, temperature=0.7):
+                raise ProviderCircuitOpenError(provider="fake", retry_after_seconds=42)
+
+        manager = build_manager(
+            word_master=CircuitOpenProvider(),
+            player_a=QueueProvider(
+                [{"intendedWord": "carrot", "clue": "Orange rabbit snack."}]
+            ),
+            player_b=QueueProvider([{"guess": "carrot"}]),
+        )
+        try:
+            await manager.start(start_request(secretWord="carrot"))
+            state = await wait_for_state(manager, lambda game: game.status != "running")
+
+            event_types = [(message.metadata or {}).get("eventType") for message in state.messages]
+            self.assertIn("master-no-guess", event_types)
+            self.assertIn("failed-intercept", event_types)
+            self.assertIn("partner-guess", event_types)
+            self.assertEqual(state.winner, "players")
+        finally:
+            await manager.reset()
+
+
+class MaxTurnsTests(IsolatedAsyncioTestCase):
+    """max attempts = (secret word length - 1) * 3, computed once the secret
+    word is known, not before."""
+
+    async def test_max_turns_computed_from_ai_chosen_secret_length(self) -> None:
+        provider = QueueProvider(
+            [
+                {"word": "canyon"},  # 6 letters -> (6-1)*3 = 15
+                {"intendedWord": "carrot", "clue": "Orange rabbit snack."},
+                {"guess": "candle", "confidence": 0.4},
+                {"guess": "carrot"},
+            ]
+        )
+        manager = build_manager(word_master=provider, player_a=provider, player_b=provider)
+        try:
+            await manager.start(start_request())
+            state = await wait_for_state(manager, lambda game: game.maxTurns > 0)
+            self.assertEqual(state.maxTurns, 15)
+        finally:
+            await manager.reset()
+
+    async def test_max_turns_computed_eagerly_for_human_provided_secret(self) -> None:
+        # Provided secrets are mirrored into state synchronously in start(),
+        # before the background loop even runs — maxTurns must be correct
+        # immediately, not just after the first poll.
+        manager = build_manager()
+        try:
+            state = await manager.start(start_request(humanRole="wordMaster", secretWord="library"))
+            self.assertEqual(state.maxTurns, 18)  # 7 letters -> (7-1)*3
+        finally:
+            await manager.reset()
+
+    async def test_one_letter_secret_word_ends_immediately_as_players_win(self) -> None:
+        manager = build_manager()
+        try:
+            await manager.start(start_request(humanRole="wordMaster", secretWord="a"))
+            state = await wait_for_state(manager, lambda game: game.status != "running")
+
+            self.assertEqual(state.winner, "players")
+            self.assertEqual(state.finishReason, "fullPrefix")
+            self.assertEqual(state.turnNumber, 1)
+            self.assertEqual(state.maxTurns, 0)
+        finally:
+            await manager.reset()
+
+    async def test_reaching_computed_max_turns_ends_with_word_master_win(self) -> None:
+        # secretWord="ab" -> maxTurns = (2-1)*3 = 3. Contact fails every turn
+        # (intended != guessed, and neither equals the secret), so the game
+        # must run exactly 3 turns then end via the max-turns rule.
+        manager = build_manager(
+            word_master=QueueProvider(
+                [
+                    {"guess": "ad", "confidence": 0.5},
+                    {"guess": "ag", "confidence": 0.5},
+                    {"guess": "aj", "confidence": 0.5},
+                ]
+            ),
+            player_a=QueueProvider(
+                [
+                    {"intendedWord": "ac", "clue": "c1"},
+                    {"guess": "ah"},
+                    {"intendedWord": "ai", "clue": "c3"},
+                ]
+            ),
+            player_b=QueueProvider(
+                [
+                    {"guess": "ae"},
+                    {"intendedWord": "af", "clue": "c2"},
+                    {"guess": "ak"},
+                ]
+            ),
+        )
+        try:
+            await manager.start(start_request(secretWord="ab"))
+            state = await wait_for_state(manager, lambda game: game.status != "running")
+
+            self.assertEqual(state.maxTurns, 3)
+            self.assertEqual(state.winner, "wordMaster")
+            self.assertEqual(state.finishReason, "maxTurns")
+            self.assertEqual(state.turnNumber, 4)
+        finally:
+            await manager.reset()

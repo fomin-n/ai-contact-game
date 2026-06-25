@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from ..auth.store import AuthStore
     from ..session.registry import SessionRegistry
     from ..session.game_session import GameSession
+    from ..usage_store import UsageStore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +32,23 @@ def get_settings(context: ContextTypes.DEFAULT_TYPE):  # type: ignore[return-val
 
 def get_auth_store(context: ContextTypes.DEFAULT_TYPE) -> "AuthStore":
     return context.bot_data["auth_store"]  # type: ignore[return-value]
+
+
+def get_usage_store(context: ContextTypes.DEFAULT_TYPE) -> "UsageStore":
+    return context.bot_data["usage_store"]  # type: ignore[return-value]
+
+
+async def enforce_daily_game_limit(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
+    """Returns True if user_id may start a new game right now (and records the attempt).
+
+    A generous abuse guard, not a billing system — see usage_store.py.
+    """
+    usage_store = get_usage_store(context)
+    settings = get_settings(context)
+    allowed, _count = await usage_store.record_game_start(
+        user_id, settings.max_games_per_day_per_user
+    )
+    return allowed
 
 
 def is_allowed_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -56,9 +74,13 @@ async def get_or_create_session(
     user_id: int,
     chat_id: int,
     context: ContextTypes.DEFAULT_TYPE,
+    display_name: str = "",
 ) -> "GameSession":
     registry = get_registry(context)
-    return await registry.get_or_create(user_id, chat_id, context.bot)
+    session = await registry.get_or_create(user_id, chat_id, context.bot)
+    if display_name:
+        session._display_name = display_name
+    return session
 
 
 def _prepare_system_send(text: str, lang: str) -> tuple[str | None, str]:

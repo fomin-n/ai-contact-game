@@ -78,6 +78,20 @@ def _make_session(user_id=1, chat_id=100, state=BotState.IDLE, language="en"):
     return session
 
 
+def _make_context(allowed=True, max_games_per_day_per_user=50):
+    """Context double exposing bot_data["usage_store"]/["settings"] as needed by
+    enforce_daily_game_limit / get_settings."""
+    context = MagicMock()
+    context.bot = MagicMock()
+    usage_store = MagicMock()
+    usage_store.record_game_start = AsyncMock(return_value=(allowed, 1))
+    context.bot_data = {
+        "usage_store": usage_store,
+        "settings": MagicMock(max_games_per_day_per_user=max_games_per_day_per_user),
+    }
+    return context
+
+
 class TestLanguageAndRoleSelection(unittest.IsolatedAsyncioTestCase):
     async def test_language_callback_transitions_to_role_selection(self):
         from backend.telegram.handlers.callbacks import _handle_language
@@ -115,7 +129,7 @@ class TestLanguageAndRoleSelection(unittest.IsolatedAsyncioTestCase):
         session.language = "en"
         query = MagicMock()
         query.edit_message_text = AsyncMock()
-        context = MagicMock()
+        context = _make_context()
 
         await _handle_role(query, session, "wordMaster", context)
 
@@ -129,8 +143,7 @@ class TestLanguageAndRoleSelection(unittest.IsolatedAsyncioTestCase):
         session.language = "en"
         query = MagicMock()
         query.edit_message_text = AsyncMock()
-        context = MagicMock()
-        context.bot = MagicMock()
+        context = _make_context()
 
         mock_start = AsyncMock()
         with patch.object(session, "start_game", new=mock_start):
@@ -147,8 +160,7 @@ class TestLanguageAndRoleSelection(unittest.IsolatedAsyncioTestCase):
         session.language = "en"
         query = MagicMock()
         query.edit_message_text = AsyncMock()
-        context = MagicMock()
-        context.bot = MagicMock()
+        context = _make_context()
 
         mock_start = AsyncMock()
         with patch.object(session, "start_game", new=mock_start):
@@ -170,8 +182,7 @@ class TestLanguageAndRoleSelection(unittest.IsolatedAsyncioTestCase):
         session = _make_session(state=BotState.SELECTING_ROLE, language="ru")
         query = MagicMock()
         query.edit_message_text = AsyncMock()
-        context = MagicMock()
-        context.bot = MagicMock()
+        context = _make_context()
 
         mock_start = AsyncMock()
         with patch.object(session, "start_game", new=mock_start):
@@ -179,6 +190,24 @@ class TestLanguageAndRoleSelection(unittest.IsolatedAsyncioTestCase):
 
         text = query.edit_message_text.call_args[0][0]
         self.assertIn(i18n.get("spectator_game_started", "ru"), text)
+
+    async def test_role_player_a_blocked_when_daily_limit_reached(self):
+        from backend.telegram.handlers.callbacks import _handle_role
+
+        session = _make_session(state=BotState.SELECTING_ROLE)
+        session.language = "en"
+        query = MagicMock()
+        query.edit_message_text = AsyncMock()
+        context = _make_context(allowed=False, max_games_per_day_per_user=50)
+
+        mock_start = AsyncMock()
+        with patch.object(session, "start_game", new=mock_start):
+            await _handle_role(query, session, "playerA", context)
+
+        mock_start.assert_not_awaited()
+        self.assertEqual(session.state, BotState.IDLE)
+        text = query.edit_message_text.call_args[0][0]
+        self.assertIn("50", text)
 
     async def test_role_keyboard_includes_ai_vs_ai_button(self):
         from backend.telegram.handlers.callbacks import _handle_language
@@ -201,7 +230,7 @@ class TestLanguageAndRoleSelection(unittest.IsolatedAsyncioTestCase):
         session = _make_session(state=BotState.SELECTING_ROLE)
         query = MagicMock()
         query.edit_message_text = AsyncMock()
-        context = MagicMock()
+        context = _make_context()
 
         await _handle_role(query, session, "bogus", context)
 
@@ -218,9 +247,10 @@ class TestSecretWordEntry(unittest.IsolatedAsyncioTestCase):
         msg.reply_text = AsyncMock()
         update = MagicMock()
         update.message = msg
+        context = _make_context()
 
         # Word with digits is invalid
-        await _handle_entering_secret(session, "appl3", update)
+        await _handle_entering_secret(session, "appl3", update, context)
 
         # State should still be ENTERING_SECRET (no transition)
         self.assertEqual(session.state, BotState.ENTERING_SECRET)
@@ -234,15 +264,35 @@ class TestSecretWordEntry(unittest.IsolatedAsyncioTestCase):
         msg.reply_text = AsyncMock()
         update = MagicMock()
         update.message = msg
+        context = _make_context()
 
         mock_start = AsyncMock()
         with patch.object(session, "start_game", new=mock_start):
-            await _handle_entering_secret(session, "apple", update)
+            await _handle_entering_secret(session, "apple", update, context)
 
         mock_start.assert_awaited_once()
         req = mock_start.call_args[0][0]
         self.assertEqual(req.humanRole, "wordMaster")
         self.assertEqual(req.secretWord, "apple")
+
+    async def test_word_master_blocked_when_daily_limit_reached(self):
+        from backend.telegram.handlers.messages import _handle_entering_secret
+
+        session = _make_session(state=BotState.ENTERING_SECRET, language="en")
+        msg = MagicMock()
+        msg.reply_text = AsyncMock()
+        update = MagicMock()
+        update.message = msg
+        context = _make_context(allowed=False, max_games_per_day_per_user=50)
+
+        mock_start = AsyncMock()
+        with patch.object(session, "start_game", new=mock_start):
+            await _handle_entering_secret(session, "apple", update, context)
+
+        mock_start.assert_not_awaited()
+        self.assertEqual(session.state, BotState.IDLE)
+        text = msg.reply_text.call_args[0][0]
+        self.assertIn("50", text)
 
 
 class TestWordMasterGuessFlow(unittest.IsolatedAsyncioTestCase):
@@ -381,6 +431,32 @@ class TestCancelAndStatus(unittest.IsolatedAsyncioTestCase):
         text = update.message.reply_text.call_args[0][0]
         self.assertIn("newgame", text.lower())
 
+    async def test_status_shows_dash_for_unknown_max_turns(self):
+        from backend.telegram.handlers.commands import status_command
+
+        session = _make_session(state=BotState.GAME_RUNNING)
+        session.gm.get_state = AsyncMock(return_value=_make_game_state(maxTurns=0, turnNumber=1))
+
+        update = MagicMock()
+        update.effective_user = MagicMock()
+        update.effective_user.id = 1
+        update.message = MagicMock()
+        update.message.reply_text = AsyncMock()
+        context = MagicMock()
+        context.bot_data = {
+            "registry": MagicMock(),
+            "settings": MagicMock(allowed_chat_types=frozenset(["private"])),
+        }
+        update.effective_chat = MagicMock()
+        update.effective_chat.type = "private"
+        context.bot_data["registry"].get = AsyncMock(return_value=session)
+
+        with patch("backend.telegram.handlers._helpers.get_registry", return_value=context.bot_data["registry"]):
+            await status_command(update, context)
+
+        text = update.message.reply_text.call_args[0][0]
+        self.assertIn("1/—", text.replace(" ", ""))
+
 
 class TestPrivateChatOnly(unittest.IsolatedAsyncioTestCase):
     async def test_group_chat_rejected(self):
@@ -405,7 +481,7 @@ class TestPrivateChatOnly(unittest.IsolatedAsyncioTestCase):
         update.message.reply_text.assert_awaited_once()
         text = update.message.reply_text.call_args[0][0]
         self.assertIn(i18n.get("private_only"), text)
-        self.assertIn("[System]", text)
+        self.assertNotIn("[System]", text)
 
 
 class TestSpectatorMessagePacing(unittest.IsolatedAsyncioTestCase):
@@ -463,7 +539,7 @@ class TestSpectatorMessagePacing(unittest.IsolatedAsyncioTestCase):
 
 
 class TestSystemMessageHelpers(unittest.IsolatedAsyncioTestCase):
-    async def test_reply_system_sends_html_with_label(self):
+    async def test_reply_system_sends_html_with_text(self):
         from backend.telegram.handlers._helpers import reply_system
 
         message = MagicMock()
@@ -473,7 +549,8 @@ class TestSystemMessageHelpers(unittest.IsolatedAsyncioTestCase):
 
         message.reply_text.assert_awaited_once()
         args, kwargs = message.reply_text.call_args
-        self.assertIn("[System]", args[0])
+        self.assertNotIn("[System]", args[0])
+        self.assertIn("Please wait a moment.", args[0])
         self.assertEqual(kwargs.get("parse_mode"), ParseMode.HTML)
 
     async def test_reply_system_falls_back_to_plain_on_bad_request(self):

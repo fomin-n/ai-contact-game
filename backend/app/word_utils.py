@@ -51,6 +51,17 @@ def first_letters(word: str, count: int) -> str:
     return word[:count]
 
 
+def compute_max_turns(word: str) -> int:
+    """Three attempts per letter after the first (already-revealed) one.
+
+    The first letter is revealed immediately on game start, so only the
+    remaining letters need to be guessed via contact attempts. A one-letter
+    word has zero remaining letters — callers must treat that as an
+    immediate full reveal rather than a zero-attempt game.
+    """
+    return max(0, (len(word) - 1) * 3)
+
+
 def clue_mentions_word(clue: str, word: str, language: Language) -> bool:
     normalized_word = normalize_word(word, language)
     text = clue.lower().replace("ё", "е")

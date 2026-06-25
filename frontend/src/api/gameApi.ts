@@ -16,7 +16,6 @@ export type StartGameParams = {
   humanRole?: HumanRole;
   agentModelSelection?: AgentModelSelection;
   secretWord?: string;
-  maxTurns?: number;
 };
 
 export type UserInputParams = {
