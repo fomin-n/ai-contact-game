@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from .. import observability
@@ -45,8 +47,11 @@ async def rules_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not update.message:
         return
     async with observability.span_for_update("command.rules", update):
-        lang = get_lang(update, context)
-        await reply_system(update.message, i18n.get("rules", lang), lang)
+        try:
+            await update.message.reply_text(i18n.RULES_HTML, parse_mode=ParseMode.HTML)
+        except BadRequest as exc:
+            LOGGER.warning("Rules message rejected as HTML, falling back to plain: %s", exc)
+            await update.message.reply_text(i18n.RULES_PLAIN)
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

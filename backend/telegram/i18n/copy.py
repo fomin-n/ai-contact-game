@@ -29,22 +29,6 @@ _COPY: dict[str, dict[str, str]] = {
         "clue_empty": "Clue cannot be empty. Try again:",
         "rate_limited": "Please wait a moment before sending again.",
         "game_input_error": "The game did not accept that input: {error}. Try again:",
-        "rules": (
-            "Contact\n\n"
-            "The Word Master chooses a secret word and reveals it letter by letter.\n"
-            "Players try to guess it by exchanging encoded clues.\n"
-            "If the Word Master intercepts a clue, contact is broken.\n"
-            "If players make contact, the next letter is revealed.\n"
-            "Players win by guessing the full secret word.\n"
-            "The maximum number of attempts is fixed once the secret word is known: "
-            "three attempts for every letter after the first (already-revealed) one. "
-            "The Word Master wins if that limit is reached.\n\n"
-            "Commands:\n"
-            "/start or /newgame - new game\n"
-            "/rules - show these rules\n"
-            "/status - current game status\n"
-            "/cancel - cancel current game"
-        ),
         "status_no_game": "No active game. Use /newgame to start.",
         "status_template": "Turn: {turn}/{max_turns}\nPrefix: {prefix}\nUsed words: {used_words}",
         "cancel_no_game": "No active game.",
@@ -119,22 +103,6 @@ _COPY: dict[str, dict[str, str]] = {
         "clue_empty": "Подсказка не может быть пустой. Попробуйте ещё раз:",
         "rate_limited": "Подождите немного перед следующей отправкой.",
         "game_input_error": "Игра не приняла этот ввод: {error}. Попробуйте ещё раз:",
-        "rules": (
-            "Есть контакт\n\n"
-            "Ведущий загадывает слово и открывает его по одной букве.\n"
-            "Игроки пытаются угадать его, обмениваясь зашифрованными подсказками.\n"
-            "Если Ведущий перехватывает подсказку, контакт оборван.\n"
-            "Если игроки устанавливают контакт, открывается следующая буква.\n"
-            "Игроки побеждают, угадав секретное слово целиком.\n"
-            "Максимальное число попыток определяется после выбора секретного слова: "
-            "по три попытки на каждую букву, кроме первой (она открывается сразу). "
-            "Ведущий побеждает, если этот лимит достигнут.\n\n"
-            "Команды:\n"
-            "/start или /newgame - новая игра\n"
-            "/rules - правила игры\n"
-            "/status - текущий статус\n"
-            "/cancel - отменить игру"
-        ),
         "status_no_game": "Нет активной игры. Используйте /newgame для начала.",
         "status_template": "Ход: {turn}/{max_turns}\nПрефикс: {prefix}\nИспользованные слова: {used_words}",
         "cancel_no_game": "Нет активной игры.",
@@ -193,3 +161,86 @@ def get(key: str, lang: str = "en", **kwargs: object) -> str:
         except (KeyError, ValueError):
             return text
     return text
+
+
+# Bilingual rules message — language-agnostic, always shows Russian then English.
+# Sent as HTML directly (not through reply_system / render_system_text).
+RULES_HTML: str = (
+    "<b>🟢 Есть контакт</b>\n"
+    "\n"
+    "Ведущий загадывает секретное слово и открывает его по одной букве за ход.\n"
+    "Игроки угадывают его, обмениваясь зашифрованными подсказками.\n"
+    "\n"
+    "🤝 Контакт установлен → открывается следующая буква.\n"
+    "✋ Ведущий перехватил подсказку → контакт оборван.\n"
+    "🏆 Угадали слово полностью → игроки победили.\n"
+    "⌛ Лимит попыток исчерпан → победил Ведущий.\n"
+    "\n"
+    "<i>Лимит: 3 попытки на каждую букву, кроме первой (она открывается сразу).</i>\n"
+    "\n"
+    "<b>Команды</b>\n"
+    "/start · /newgame — новая игра\n"
+    "/rules — правила игры\n"
+    "/status — статус игры\n"
+    "/cancel — отменить игру\n"
+    "\n"
+    "--\n"
+    "\n"
+    "<b>🟢 Contact</b>\n"
+    "\n"
+    "The Word Master picks a secret word and reveals it one letter per turn.\n"
+    "Players try to guess it by exchanging encoded clues.\n"
+    "\n"
+    "🤝 Players make contact → next letter is revealed.\n"
+    "✋ Word Master intercepts a clue → contact is broken.\n"
+    "🏆 Players guess the full word → players win.\n"
+    "⌛ Attempt limit reached → Word Master wins.\n"
+    "\n"
+    "<i>Limit: 3 attempts per letter after the first (already revealed).</i>\n"
+    "\n"
+    "<b>Commands</b>\n"
+    "/start · /newgame — new game\n"
+    "/rules — show these rules\n"
+    "/status — current game status\n"
+    "/cancel — cancel current game"
+)
+
+RULES_PLAIN: str = (
+    "🟢 Есть контакт\n"
+    "\n"
+    "Ведущий загадывает секретное слово и открывает его по одной букве за ход.\n"
+    "Игроки угадывают его, обмениваясь зашифрованными подсказками.\n"
+    "\n"
+    "🤝 Контакт установлен → открывается следующая буква.\n"
+    "✋ Ведущий перехватил подсказку → контакт оборван.\n"
+    "🏆 Угадали слово полностью → игроки победили.\n"
+    "⌛ Лимит попыток исчерпан → победил Ведущий.\n"
+    "\n"
+    "Лимит: 3 попытки на каждую букву, кроме первой (она открывается сразу).\n"
+    "\n"
+    "Команды\n"
+    "/start · /newgame — новая игра\n"
+    "/rules — правила игры\n"
+    "/status — статус игры\n"
+    "/cancel — отменить игру\n"
+    "\n"
+    "--\n"
+    "\n"
+    "🟢 Contact\n"
+    "\n"
+    "The Word Master picks a secret word and reveals it one letter per turn.\n"
+    "Players try to guess it by exchanging encoded clues.\n"
+    "\n"
+    "🤝 Players make contact → next letter is revealed.\n"
+    "✋ Word Master intercepts a clue → contact is broken.\n"
+    "🏆 Players guess the full word → players win.\n"
+    "⌛ Attempt limit reached → Word Master wins.\n"
+    "\n"
+    "Limit: 3 attempts per letter after the first (already revealed).\n"
+    "\n"
+    "Commands\n"
+    "/start · /newgame — new game\n"
+    "/rules — show these rules\n"
+    "/status — current game status\n"
+    "/cancel — cancel current game"
+)
