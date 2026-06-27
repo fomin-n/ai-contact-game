@@ -62,18 +62,6 @@ _COPY: dict[str, dict[str, str]] = {
         "prompt_partner_guess_label": "Guess the word Player B encoded",
         # Render / game over
         "game_over_stats": "Attempts: {turns}/{max_turns}  ·  Words used: {used}",
-        "auth_required_welcome": (
-            "Welcome to AI Contact Game \U0001f7e2 (beta).\n\n"
-            "Access is currently restricted to invited users.\n\n"
-            "Authenticate with:\n"
-            "  /login <access_code>\n\n"
-            "Contact the administrator if you need a code."
-        ),
-        "auth_required_brief": "Access required. Use /login <access_code> to authenticate.",
-        "login_usage": "Please provide your access code: /login <access_code>",
-        "login_success": "Access granted! Use /newgame to start playing.",
-        "login_already_authorized": "You are already authorized. Use /newgame to start a game.",
-        "login_invalid": "Invalid or already used code. Check the code and try again.",
     },
     "ru": {
         "select_language": "Выберите язык:",
@@ -136,18 +124,6 @@ _COPY: dict[str, dict[str, str]] = {
         "prompt_partner_guess_label": "Угадайте слово Игрока B",
         # Render / game over
         "game_over_stats": "Попыток: {turns}/{max_turns}  ·  Слов использовано: {used}",
-        "auth_required_welcome": (
-            "Добро пожаловать в AI Contact Game \U0001f7e2 (бета).\n\n"
-            "Доступ ограничен приглашёнными пользователями.\n\n"
-            "Аутентифицируйтесь командой:\n"
-            "  /login <код_доступа>\n\n"
-            "Обратитесь к администратору, если у вас нет кода."
-        ),
-        "auth_required_brief": "Доступ закрыт. Используйте /login <код_доступа> для входа.",
-        "login_usage": "Укажите код доступа: /login <код_доступа>",
-        "login_success": "Доступ разрешён! Используйте /newgame для начала игры.",
-        "login_already_authorized": "Вы уже авторизованы. Используйте /newgame для начала игры.",
-        "login_invalid": "Неверный или уже использованный код. Проверьте код и попробуйте снова.",
     },
 }
 

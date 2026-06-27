@@ -14,7 +14,6 @@ class TelegramBotSettings:
         enable_phoenix_tracing: bool,
         phoenix_project_name: str,
         phoenix_collector_endpoint: str,
-        auth_data_path: Path,
         ai_spectator_message_delay_seconds: float,
         usage_data_path: Path,
         max_games_per_day_per_user: int,
@@ -26,7 +25,6 @@ class TelegramBotSettings:
         self.enable_phoenix_tracing = enable_phoenix_tracing
         self.phoenix_project_name = phoenix_project_name
         self.phoenix_collector_endpoint = phoenix_collector_endpoint
-        self.auth_data_path = auth_data_path
         self.ai_spectator_message_delay_seconds = ai_spectator_message_delay_seconds
         self.usage_data_path = usage_data_path
         self.max_games_per_day_per_user = max_games_per_day_per_user
@@ -50,9 +48,6 @@ class TelegramBotSettings:
             phoenix_project_name=os.getenv("PHOENIX_PROJECT_NAME", "ai-contact-game-bot"),
             phoenix_collector_endpoint=os.getenv(
                 "PHOENIX_COLLECTOR_ENDPOINT", "http://127.0.0.1:6006/v1/traces"
-            ),
-            auth_data_path=Path(
-                os.getenv("AI_CONTACT_TELEGRAM_AUTH_DATA_PATH", "data/auth.json")
             ),
             ai_spectator_message_delay_seconds=float(
                 os.getenv("AI_CONTACT_TELEGRAM_AI_SPECTATOR_MESSAGE_DELAY_SECONDS", "1.5")

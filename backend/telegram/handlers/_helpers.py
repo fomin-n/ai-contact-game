@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from telegram import Bot, Message
     from telegram.ext import CallbackContext
 
-    from ..auth.store import AuthStore
     from ..session.registry import SessionRegistry
     from ..session.game_session import GameSession
     from ..usage_store import UsageStore
@@ -30,10 +29,6 @@ def get_settings(context: ContextTypes.DEFAULT_TYPE):  # type: ignore[return-val
     return context.bot_data["settings"]
 
 
-def get_auth_store(context: ContextTypes.DEFAULT_TYPE) -> "AuthStore":
-    return context.bot_data["auth_store"]  # type: ignore[return-value]
-
-
 def get_usage_store(context: ContextTypes.DEFAULT_TYPE) -> "UsageStore":
     return context.bot_data["usage_store"]  # type: ignore[return-value]
 
@@ -45,9 +40,13 @@ async def enforce_daily_game_limit(context: ContextTypes.DEFAULT_TYPE, user_id: 
     """
     usage_store = get_usage_store(context)
     settings = get_settings(context)
-    allowed, _count = await usage_store.record_game_start(
+    allowed, count = await usage_store.record_game_start(
         user_id, settings.max_games_per_day_per_user
     )
+    if allowed and count == 1:
+        LOGGER.info("user=%d first game start of the day", user_id)
+    elif not allowed:
+        LOGGER.info("user=%d daily game limit reached (%d)", user_id, count)
     return allowed
 
 
