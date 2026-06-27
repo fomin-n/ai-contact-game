@@ -428,12 +428,17 @@ class TestRenderPrefixRevealed(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestRenderStatus(unittest.TestCase):
-    def test_contains_turn_and_prefix(self):
+    def test_contains_turn(self):
         state = _state(turnNumber=5, maxTurns=50, currentPrefix="CO")
         result = render.render_status(state, "en")
         self.assertIn("🎮", result)
         self.assertIn("Turn 5 / 50", result)
-        self.assertIn("<b>CO</b>", result)
+        self.assertNotIn("<b>CO</b>", result)
+
+    def test_prefix_not_in_status(self):
+        state = _state(currentPrefix="CO")
+        result = render.render_status(state, "en")
+        self.assertNotIn("CO", result)
 
     def test_used_words_listed(self):
         state = _state(usedWords=["snake", "core", "copper"])
@@ -451,13 +456,7 @@ class TestRenderStatus(unittest.TestCase):
         state = _state(turnNumber=2, maxTurns=50, currentPrefix="К", language="ru")
         result = render.render_status(state, "ru")
         self.assertIn("Ход 2 / 50", result)
-        self.assertIn("<b>К</b>", result)
-
-    def test_prefix_is_html_escaped(self):
-        state = _state(currentPrefix="<X>")
-        result = render.render_status(state, "en")
-        self.assertNotIn("<X>", result)
-        self.assertIn("&lt;X&gt;", result)
+        self.assertNotIn("<b>К</b>", result)
 
     def test_long_used_words_capped_at_15(self):
         words = [f"word{i}" for i in range(20)]

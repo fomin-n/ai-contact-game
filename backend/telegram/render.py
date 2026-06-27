@@ -223,7 +223,6 @@ def render_status(snapshot: "GameState", lang: str) -> str:
     lines = [
         f"🎮 <b>{esc(i18n.get('status_game_name', lang))}</b>  ·  "
         f"{esc(i18n.get('status_turn', lang))} {turn}",
-        f"{esc(i18n.get('status_prefix', lang))}: <b>{esc(snapshot.currentPrefix)}</b>",
     ]
     if snapshot.usedWords:
         words = snapshot.usedWords[-15:]
