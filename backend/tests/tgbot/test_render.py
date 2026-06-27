@@ -244,71 +244,90 @@ class TestRenderInlineEvent(unittest.TestCase):
 
 
 class TestRenderInlineEventContactResolution(unittest.TestCase):
-    def test_intended_word_ai_shows_role_and_word(self):
+    """intended-word and partner-guess use the same blockquote format as dialogue."""
+
+    def test_intended_word_ai_shows_role_header_and_blockquote(self):
         msg = _msg(role="playerA", text="snake", event_type="intended-word")
         result = render.render_inline_event(msg, "en")
         self.assertIn("🔵", result)
-        self.assertIn("Player A (LLM)", result)
-        self.assertIn(": snake", result)
+        self.assertIn("<b>Player A (LLM)</b>", result)
+        self.assertIn("<blockquote>snake</blockquote>", result)
 
-    def test_partner_guess_ai_shows_role_and_word(self):
+    def test_partner_guess_ai_shows_role_header_and_blockquote(self):
         msg = _msg(role="playerB", text="cobra", event_type="partner-guess")
         result = render.render_inline_event(msg, "en")
         self.assertIn("🟢", result)
-        self.assertIn("Player B (LLM)", result)
-        self.assertIn(": cobra", result)
+        self.assertIn("<b>Player B (LLM)</b>", result)
+        self.assertIn("<blockquote>cobra</blockquote>", result)
 
-    def test_intended_word_human_shows_you(self):
+    def test_intended_word_human_shows_you_in_blockquote(self):
         msg = _msg(role="playerA", text="snake", event_type="intended-word")
         result = render.render_inline_event(msg, "en", human_role="playerA")
-        self.assertIn("You", result)
-        self.assertIn(": snake", result)
+        self.assertIn("<b>You</b>", result)
+        self.assertIn("<blockquote>snake</blockquote>", result)
         self.assertNotIn("(LLM)", result)
 
-    def test_intended_word_human_shows_vy_in_russian(self):
+    def test_intended_word_human_shows_vy_in_russian_blockquote(self):
         msg = _msg(role="playerA", text="змей", event_type="intended-word")
         result = render.render_inline_event(msg, "ru", human_role="playerA")
-        self.assertIn("Вы", result)
-        self.assertIn("змей", result)
+        self.assertIn("<b>Вы</b>", result)
+        self.assertIn("<blockquote>змей</blockquote>", result)
         self.assertNotIn("(LLM)", result)
 
-    def test_intended_word_human_uses_display_name(self):
+    def test_intended_word_human_uses_display_name_in_blockquote(self):
         msg = _msg(role="playerA", text="snake", event_type="intended-word")
         result = render.render_inline_event(msg, "en", human_role="playerA", display_name="Alice")
-        self.assertIn("Alice", result)
-        self.assertIn(": snake", result)
+        self.assertIn("<b>Alice</b>", result)
+        self.assertIn("<blockquote>snake</blockquote>", result)
         self.assertNotIn("You", result)
-
-    def test_partner_guess_ai_when_human_is_actor(self):
-        # When human is playerA (actor), partner (playerB) is always LLM
-        msg = _msg(role="playerB", text="cobra", event_type="partner-guess")
-        result = render.render_inline_event(msg, "en", human_role="playerA")
-        self.assertIn("Player B (LLM)", result)
-
-    def test_partner_guess_human_playerA_as_partner(self):
-        # When human is playerA and they are the partner responding to playerB's clue
-        msg = _msg(role="playerA", text="cobra", event_type="partner-guess")
-        result = render.render_inline_event(msg, "en", human_role="playerA")
-        self.assertIn("You", result)
         self.assertNotIn("(LLM)", result)
 
-    def test_contact_resolution_is_italic(self):
+    def test_partner_guess_ai_when_human_is_actor(self):
+        msg = _msg(role="playerB", text="cobra", event_type="partner-guess")
+        result = render.render_inline_event(msg, "en", human_role="playerA")
+        self.assertIn("<b>Player B (LLM)</b>", result)
+        self.assertIn("<blockquote>cobra</blockquote>", result)
+
+    def test_partner_guess_human_playerA_as_partner(self):
+        msg = _msg(role="playerA", text="cobra", event_type="partner-guess")
+        result = render.render_inline_event(msg, "en", human_role="playerA")
+        self.assertIn("<b>You</b>", result)
+        self.assertIn("<blockquote>cobra</blockquote>", result)
+        self.assertNotIn("(LLM)", result)
+
+    def test_contact_word_uses_blockquote_not_italic(self):
         msg = _msg(role="playerA", text="snake", event_type="intended-word")
         result = render.render_inline_event(msg, "en")
-        self.assertTrue(result.startswith("<i>"))
-        self.assertTrue(result.endswith("</i>"))
+        self.assertIn("<blockquote>snake</blockquote>", result)
+        # Must NOT use the old inline italic format
+        self.assertNotIn("<i>", result)
+        self.assertNotIn(": snake", result)
 
-    def test_word_is_html_escaped(self):
+    def test_word_is_html_escaped_in_blockquote(self):
         msg = _msg(role="playerA", text="<inject>", event_type="intended-word")
         result = render.render_inline_event(msg, "en")
         self.assertNotIn("<inject>", result)
         self.assertIn("&lt;inject&gt;", result)
+        self.assertIn("<blockquote>", result)
 
-    def test_russian_intended_word_llm(self):
+    def test_russian_intended_word_llm_uses_blockquote(self):
         msg = _msg(role="playerA", text="змея", event_type="intended-word")
         result = render.render_inline_event(msg, "ru")
-        self.assertIn("Игрок A (LLM)", result)
-        self.assertIn("змея", result)
+        self.assertIn("<b>Игрок A (LLM)</b>", result)
+        self.assertIn("<blockquote>змея</blockquote>", result)
+
+    def test_matches_dialogue_format_structurally(self):
+        """render_inline_event for word events must produce the same HTML
+        structure as render_dialogue for a clue from the same role."""
+        word_msg = _msg(role="playerA", text="snake", event_type="intended-word")
+        clue_msg = _msg(role="playerA", text="snake", event_type="clue")
+        word_result = render.render_inline_event(word_msg, "en")
+        clue_result = render.render_dialogue(clue_msg, "en")
+        # Both must contain the same role header and blockquote
+        self.assertIn("<b>Player A (LLM)</b>", word_result)
+        self.assertIn("<b>Player A (LLM)</b>", clue_result)
+        self.assertIn("<blockquote>snake</blockquote>", word_result)
+        self.assertIn("<blockquote>snake</blockquote>", clue_result)
 
 
 # ---------------------------------------------------------------------------

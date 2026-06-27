@@ -3,14 +3,14 @@
 All user/LLM-generated text is passed through `esc()` before embedding in HTML.
 Nothing in this module does I/O or holds state.
 
-Visual language (three tiers, kept visually distinct on purpose):
-  - System (instructions, errors, menus): no label — context makes the role clear.
-    Light italic text for validation messages; plain text for confirmations.
-  - Dialogue (an actual clue or guess spoken by a player/Word Master): bold
-    role header with emoji and "(LLM)" suffix when AI-controlled, followed by
-    the utterance in a <blockquote>.
-  - Outcome (contact made/broken, reveals): single italic line with an emoji,
-    no label — compact, no blockquote, sits between the two above in weight.
+Visual language (two main tiers for player speech, plus system):
+  - Player/WM speech (clue, WM guess, or revealed word/guess in contact):
+    bold role header with emoji and "(LLM)" suffix when AI-controlled, followed
+    by the utterance in a <blockquote>.  All three event types share this
+    format via _player_block / _dialogue_block.
+  - System events (contact result, prefix reveal, errors): single italic line
+    with an emoji, no label, no blockquote.
+  - System instructions/menus: no label, plain or italic text.
 Persistent status (turn/prefix/used words) is sent once and edited in place.
 """
 from __future__ import annotations
@@ -99,16 +99,26 @@ def _is_llm_role(role: str, human_role: str) -> bool:
     return human_role in ("", "none") or role != human_role
 
 
-def _role_header(role: str, lang: str, *, is_llm: bool = True) -> str:
-    emoji = _ROLE_EMOJI.get(role, "•")
+def _actor_name(role: str, lang: str, *, is_llm: bool = True) -> str:
+    """Return the display name for a role, with or without the (LLM) suffix."""
     names = _ROLE_NAME.get(lang) or _ROLE_NAME["en"]
     name = names.get(role, role)
-    suffix = _LLM_SUFFIX.get(lang, " (LLM)") if is_llm else ""
-    return f"{emoji} <b>{esc(name + suffix)}</b>"
+    return name + (_LLM_SUFFIX.get(lang, " (LLM)") if is_llm else "")
+
+
+def _role_header(role: str, lang: str, *, is_llm: bool = True) -> str:
+    emoji = _ROLE_EMOJI.get(role, "•")
+    return f"{emoji} <b>{esc(_actor_name(role, lang, is_llm=is_llm))}</b>"
+
+
+def _player_block(role: str, actor: str, text: str) -> str:
+    """Shared builder for all player/WM speech: emoji + bold actor + blockquote."""
+    emoji = _ROLE_EMOJI.get(role, "•")
+    return f"{emoji} <b>{esc(actor)}</b>\n<blockquote>{esc(text)}</blockquote>"
 
 
 def _dialogue_block(role: str, text: str, lang: str, *, is_llm: bool = True) -> str:
-    return f"{_role_header(role, lang, is_llm=is_llm)}\n<blockquote>{esc(text)}</blockquote>"
+    return _player_block(role, _actor_name(role, lang, is_llm=is_llm), text)
 
 
 def render_system_text(text: str, lang: str) -> str:  # noqa: ARG001
@@ -152,23 +162,23 @@ def render_inline_event(
     human_role: str = "none",
     display_name: str = "",
 ) -> str:
-    """Single compact, lightweight line for a contact/reveal outcome.
+    """Render a contact-resolution or outcome event.
 
-    For intended-word and partner-guess events, the actor's role and word are
-    shown explicitly.  The human player's word uses their display name (or
-    "You" / "Вы" when no name is available).
+    Revealed words (intended-word, partner-guess) use the same blockquote
+    format as all other player speech so the feed looks consistent.  The
+    human player's word shows their display name (or "You" / "Вы").
+
+    Pure system outcomes (contact-succeeded, contact-failed, …) stay as a
+    single italic line with an emoji — no role label, no blockquote.
     """
     event_type = (msg.metadata or {}).get("eventType", "")
 
     if event_type in ("intended-word", "partner-guess"):
-        emoji = _ROLE_EMOJI.get(msg.role, "•")
         if not _is_llm_role(msg.role, human_role):
             actor = display_name or ("Вы" if lang == "ru" else "You")
         else:
-            names = _ROLE_NAME.get(lang) or _ROLE_NAME["en"]
-            suffix = _LLM_SUFFIX.get(lang, " (LLM)")
-            actor = names.get(msg.role, msg.role) + suffix
-        return f"<i>{emoji} {esc(actor)}: {esc(msg.text)}</i>"
+            actor = _actor_name(msg.role, lang, is_llm=True)
+        return _player_block(msg.role, actor, msg.text)
 
     emoji = _EVENT_EMOJI.get(event_type) or _ROLE_EMOJI.get(msg.role, "•")
     return f"<i>{emoji} {esc(msg.text)}</i>"
