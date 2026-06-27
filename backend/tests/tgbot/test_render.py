@@ -243,6 +243,70 @@ class TestRenderInlineEvent(unittest.TestCase):
         self.assertIn("&lt;b&gt;", result)
 
 
+class TestRenderInlineEventSecretChosen(unittest.TestCase):
+    """secret-chosen: label on line 1, bold word on line 2 (or label only when redacted)."""
+
+    def _secret_msg(self, text, word=None):
+        meta = {"eventType": "secret-chosen"}
+        if word is not None:
+            meta["word"] = word
+        from backend.app.schemas import GameMessage
+        return GameMessage(id="x", role="system", text=text, timestamp=0.0, metadata=meta)
+
+    def test_word_on_second_line_bold(self):
+        msg = self._secret_msg("Word Master chose the secret word. almanac", word="almanac")
+        result = render.render_inline_event(msg, "en")
+        self.assertIn("➡️", result)
+        self.assertIn("<b>almanac</b>", result)
+
+    def test_label_on_first_line_italic(self):
+        msg = self._secret_msg("Word Master chose the secret word. almanac", word="almanac")
+        result = render.render_inline_event(msg, "en")
+        lines = result.split("\n")
+        self.assertEqual(len(lines), 2)
+        self.assertIn("<i>", lines[0])
+        self.assertIn("🔒", lines[0])
+        self.assertNotIn("almanac", lines[0])  # word only on second line
+
+    def test_word_not_duplicated_in_label_line(self):
+        msg = self._secret_msg("Word Master chose the secret word. almanac", word="almanac")
+        result = render.render_inline_event(msg, "en")
+        lines = result.split("\n")
+        self.assertNotIn("almanac", lines[0])
+        self.assertIn("almanac", lines[1])
+
+    def test_russian_secret_word(self):
+        msg = self._secret_msg("Ведущий выбрал секретное слово. альманах", word="альманах")
+        result = render.render_inline_event(msg, "ru")
+        self.assertIn("🔒", result)
+        self.assertIn("➡️", result)
+        self.assertIn("<b>альманах</b>", result)
+        lines = result.split("\n")
+        self.assertNotIn("альманах", lines[0])
+
+    def test_word_is_html_escaped(self):
+        msg = self._secret_msg("Label. <evil>", word="<evil>")
+        result = render.render_inline_event(msg, "en")
+        self.assertNotIn("<evil>", result)
+        self.assertIn("&lt;evil&gt;", result)
+        self.assertIn("<b>", result)
+
+    def test_redacted_shows_only_label(self):
+        # humanRole=playerA: game.py removes metadata["word"] and strips the text
+        msg = self._secret_msg("Word Master chose the secret word.")  # no word kwarg
+        result = render.render_inline_event(msg, "en")
+        self.assertIn("🔒", result)
+        self.assertNotIn("➡️", result)
+        self.assertNotIn("<b>", result)
+        self.assertIn("<i>", result)
+
+    def test_redacted_russian(self):
+        msg = self._secret_msg("Ведущий выбрал секретное слово.")
+        result = render.render_inline_event(msg, "ru")
+        self.assertNotIn("➡️", result)
+        self.assertNotIn("<b>", result)
+
+
 class TestRenderInlineEventContactResolution(unittest.TestCase):
     """intended-word and partner-guess use the same blockquote format as dialogue."""
 

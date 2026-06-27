@@ -180,6 +180,17 @@ def render_inline_event(
             actor = _actor_name(msg.role, lang, is_llm=True)
         return _player_block(msg.role, actor, msg.text)
 
+    if event_type == "secret-chosen":
+        word = (msg.metadata or {}).get("word", "")
+        if word:
+            # Strip the trailing " {word}" appended by game.py to get just
+            # the announcement label, then show the word on its own bold line.
+            suffix = f" {word}"
+            label = msg.text[: -len(suffix)] if msg.text.endswith(suffix) else msg.text
+            return f"<i>🔒 {esc(label)}</i>\n➡️ <b>{esc(word)}</b>"
+        # Word is absent — redacted for the human playerA; show only the label.
+        return f"<i>🔒 {esc(msg.text)}</i>"
+
     emoji = _EVENT_EMOJI.get(event_type) or _ROLE_EMOJI.get(msg.role, "•")
     return f"<i>{emoji} {esc(msg.text)}</i>"
 
