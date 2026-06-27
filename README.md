@@ -2,6 +2,8 @@
 
 ![Cover](docs/cover.png)
 
+**Play on Telegram: [@ai_contact_game_bot](https://t.me/ai_contact_game_bot)**
+
 A small LLM-agent experiment inspired by the Russian word game **"Есть контакт" / "Contact"**.
 
 The game has three modes:
