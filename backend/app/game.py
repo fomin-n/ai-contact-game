@@ -32,7 +32,7 @@ from .schemas import (
     StartGameRequest,
     UserInputRequest,
 )
-from .word_utils import compute_max_turns, first_letters, is_valid_word, normalize_word, same_word
+from .word_utils import compute_max_turns, first_letters, is_valid_word, normalize_word, redact_word, same_word
 
 COPY = {
     "en": {
@@ -306,7 +306,7 @@ class GameManager:
                     if event_type == "secret-chosen":
                         message.text = labels["wordMasterChose"]
                     else:
-                        message.text = message.text.replace(secret, secret_placeholder)
+                        message.text = redact_word(message.text, secret, visible_state.language, secret_placeholder)
                     if message.metadata and message.metadata.get("word") == secret:
                         message.metadata = {**message.metadata}
                         message.metadata.pop("word", None)
@@ -442,7 +442,7 @@ class GameManager:
                 if event_type == "secret-chosen":
                     text = labels["wordMasterChose"]
                 elif state.secretWord:
-                    text = text.replace(state.secretWord, secret_placeholder)
+                    text = redact_word(text, state.secretWord, state.language, secret_placeholder)
             history.append(f"{index}. {role_label(state.language, message.role)}: {text}")
         return history
 

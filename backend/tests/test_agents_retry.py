@@ -28,6 +28,7 @@ class FakeProvider(LLMProvider):
         schema: dict[str, Any] | None = None,
         model: str | None = None,
         temperature: float = 0.7,
+        supports_json_schema: bool = True,
     ) -> dict[str, Any]:
         self.messages_seen.append(messages)
         return self.responses.pop(0)
@@ -142,7 +143,7 @@ class LLMRetryTests(IsolatedAsyncioTestCase):
             def has_api_key(self) -> bool:
                 return True
 
-            async def chat_json(self, messages, schema=None, model=None, temperature=0.7):
+            async def chat_json(self, messages, schema=None, model=None, temperature=0.7, supports_json_schema=True):
                 self.call_count += 1
                 raise ProviderCircuitOpenError(provider="fake", retry_after_seconds=42)
 

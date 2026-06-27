@@ -62,6 +62,26 @@ def compute_max_turns(word: str) -> int:
     return max(0, (len(word) - 1) * 3)
 
 
+def redact_word(text: str, word: str, language: Language, placeholder: str) -> str:
+    """Replace whole-word occurrences of word in text with placeholder.
+
+    Case-insensitive. For Russian, ё and е are treated as equivalent in both
+    the word and the text being searched.
+    """
+    if not word:
+        return text
+    normalized = word.lower()
+    if language == "ru":
+        normalized = normalized.replace("ё", "е")
+        pattern_word = normalized.replace("е", "[её]")
+        boundary = "[а-яёА-ЯЁ]"
+    else:
+        pattern_word = re.escape(normalized)
+        boundary = "[a-zA-Z]"
+    pattern = f"(?<!{boundary}){pattern_word}(?!{boundary})"
+    return re.sub(pattern, placeholder, text, flags=re.IGNORECASE)
+
+
 def clue_mentions_word(clue: str, word: str, language: Language) -> bool:
     normalized_word = normalize_word(word, language)
     text = clue.lower().replace("ё", "е")

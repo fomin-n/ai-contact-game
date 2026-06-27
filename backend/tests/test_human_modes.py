@@ -28,6 +28,7 @@ class QueueProvider(LLMProvider):
         schema: dict[str, Any] | None = None,
         model: str | None = None,
         temperature: float = 0.7,
+        supports_json_schema: bool = True,
     ) -> dict[str, Any]:
         await asyncio.sleep(0)
         if not self.responses:
@@ -301,7 +302,7 @@ class HumanModeTests(IsolatedAsyncioTestCase):
         from backend.app.providers.http_json import ProviderCircuitOpenError
 
         class CircuitOpenProvider(QueueProvider):
-            async def chat_json(self, messages, schema=None, model=None, temperature=0.7):
+            async def chat_json(self, messages, schema=None, model=None, temperature=0.7, supports_json_schema=True):
                 raise ProviderCircuitOpenError(provider="fake", retry_after_seconds=42)
 
         manager = build_manager(

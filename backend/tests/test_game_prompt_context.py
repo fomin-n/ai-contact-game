@@ -23,6 +23,7 @@ class StubProvider(LLMProvider):
         schema: dict[str, Any] | None = None,
         model: str | None = None,
         temperature: float = 0.7,
+        supports_json_schema: bool = True,
     ) -> dict[str, Any]:
         raise NotImplementedError
 

@@ -13,6 +13,7 @@ import httpx
 from pydantic import BaseModel
 
 from .event_log import write_event
+from .model_catalog import model_supports_json_schema
 from .prompt_loader import RenderedPrompt, render_prompt
 from .providers.base import LLMProvider
 from .providers.http_json import MissingApiKeyError, ProviderCapacityError, ProviderCircuitOpenError
@@ -208,6 +209,7 @@ async def _with_repair(
       api_failed = False
       validation_failed = False
       rejected_answer_signatures: set[str] = set()
+      _supports_json_schema = model_supports_json_schema(provider.name, model)
       for attempt in range(MAX_LLM_ATTEMPTS):
         prompt = build_prompt(attempt, repair_feedback if validation_failed else "")
         _log_prompt_call(
@@ -224,6 +226,7 @@ async def _with_repair(
                 schema=response_schema or prompt.schema,
                 model=model,
                 temperature=prompt.temperature,
+                supports_json_schema=_supports_json_schema,
             )
         except ProviderCircuitOpenError as error:
             # The breaker is already open for this provider — retrying here would

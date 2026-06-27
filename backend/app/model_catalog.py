@@ -66,6 +66,18 @@ def known_provider_ids() -> set[str]:
     return set(PROVIDER_IDS)
 
 
+def model_supports_json_schema(provider_id: str, model_id: str) -> bool:
+    """Return whether a catalog model supports the json_schema response format.
+
+    Returns True for unknown/custom models (conservative: assume support unless
+    the catalog explicitly flags otherwise).
+    """
+    for model in CATALOG_MODELS.get(provider_id, []):
+        if model.id == model_id:
+            return model.supports_json_schema
+    return True
+
+
 def build_model_catalog() -> list[ProviderModelCatalog]:
     catalog: list[ProviderModelCatalog] = []
     for provider_id in PROVIDER_IDS:

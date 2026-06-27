@@ -26,9 +26,10 @@ class OpenAICompatibleProvider(LLMProvider):
         schema: dict[str, Any] | None = None,
         model: str | None = None,
         temperature: float = 0.7,
+        supports_json_schema: bool = True,
     ) -> dict[str, Any]:
         response_format = {"type": "json_object"}
-        if schema:
+        if schema and supports_json_schema:
             response_format = {
                 "type": "json_schema",
                 "json_schema": {
