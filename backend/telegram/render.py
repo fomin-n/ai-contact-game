@@ -63,7 +63,7 @@ _DIALOGUE_EVENTS = frozenset({"clue", "master-guess"})
 # Events that update the status message (edit in-place).
 _STATUS_EVENTS = frozenset({"prefix"})
 
-# Events rendered inline and batched (one system message per burst).
+# Events rendered inline — each gets its own message.
 _INLINE_EVENTS = frozenset({
     "blocked", "failed-intercept", "contact-succeeded", "contact-failed",
     "master-no-guess", "secret-chosen", "intended-word", "partner-guess",
@@ -186,11 +186,6 @@ def is_human_origin(msg: "GameMessage", human_role: str) -> bool:
         return False
     event_type = (msg.metadata or {}).get("eventType", "")
     return msg.role == human_role and event_type in _DIALOGUE_EVENTS
-
-
-def render_system_batch(lines: list[str]) -> str:
-    """Combine multiple inline event lines into one Telegram message."""
-    return "\n".join(lines)
 
 
 def render_prefix_revealed(prefix: str, lang: str) -> str:

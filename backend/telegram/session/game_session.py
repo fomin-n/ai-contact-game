@@ -55,7 +55,6 @@ class GameSession:
         self._last_processed_update_id: int | None = None
         # Rendering state
         self._status_msg_id: int | None = None
-        self._system_buffer: list[str] = []
         self._display_name: str = ""
 
     def start_monitor(self) -> None:
@@ -101,8 +100,6 @@ class GameSession:
                 if spectator_delay > 0:
                     await asyncio.sleep(spectator_delay)
 
-            await self._flush_system_buffer()
-
             if snapshot.pendingUserInput is not None:
                 async with self.lock:
                     kind = snapshot.pendingUserInput.kind
@@ -132,34 +129,26 @@ class GameSession:
             # Human's own dialogue (clue, WM guess) is already visible as their sent Telegram message.
             if render.is_human_origin(msg, self.human_role):
                 return
-            await self._flush_system_buffer()
             await self._send_html(render.render_dialogue(msg, self.language, human_role=self.human_role))
             return
 
         if category == "status":
-            await self._flush_system_buffer()
             await self._send_or_edit_status(snapshot)
             # Also show the new prefix inline so it's always visible in the chat flow after contact.
             prefix = (msg.metadata or {}).get("prefix", "")
             if prefix:
-                self._system_buffer.append(render.render_prefix_revealed(prefix, self.language))
+                await self._send_html(render.render_prefix_revealed(prefix, self.language))
             return
 
-        # "inline" — accumulate for batching.
-        # Human-origin intended-word / partner-guess are NOT suppressed: the contact
-        # resolution display shows every participant's word with a proper role label.
-        self._system_buffer.append(render.render_inline_event(
+        # "inline" — each contact/reveal event gets its own message so they arrive
+        # individually and in order.  Human-origin intended-word / partner-guess are
+        # NOT suppressed: the contact resolution display shows every participant's word
+        # with a proper role label.
+        await self._send_html(render.render_inline_event(
             msg, self.language,
             human_role=self.human_role,
             display_name=self._display_name,
         ))
-
-    async def _flush_system_buffer(self) -> None:
-        if not self._system_buffer:
-            return
-        text = render.render_system_batch(self._system_buffer)
-        self._system_buffer.clear()
-        await self._send_html(text)
 
     async def _send_or_edit_status(self, snapshot: GameState) -> None:
         text = render.render_status(snapshot, self.language)
@@ -237,7 +226,6 @@ class GameSession:
             async with self.lock:
                 self._last_sent_msg_idx = 0
                 self._status_msg_id = None
-                self._system_buffer = []
                 self.state = BotState.GAME_RUNNING
             observability._event(span, "game.started", {
                 "language": request.language,

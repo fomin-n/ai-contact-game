@@ -312,21 +312,6 @@ class TestRenderInlineEventContactResolution(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# render_system_batch()
-# ---------------------------------------------------------------------------
-
-class TestRenderSystemBatch(unittest.TestCase):
-    def test_joins_lines_with_newline(self):
-        lines = ["✋ Contact broken.", "✅ Contact succeeded."]
-        result = render.render_system_batch(lines)
-        self.assertEqual(result, "✋ Contact broken.\n✅ Contact succeeded.")
-
-    def test_single_line(self):
-        result = render.render_system_batch(["✅ Contact."])
-        self.assertEqual(result, "✅ Contact.")
-
-
-# ---------------------------------------------------------------------------
 # render_prefix_revealed()
 # ---------------------------------------------------------------------------
 
