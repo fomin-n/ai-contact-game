@@ -8,7 +8,7 @@ from telegram.constants import ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from .. import render
+from .. import observability, render
 
 if TYPE_CHECKING:
     from telegram import Bot, Message
@@ -103,6 +103,7 @@ async def reply_system(message: "Message", text: str, lang: str, **kwargs: objec
     copy — keeps these visually distinct (lighter) from player dialogue.
     """
     html_text, plain_fallback = _prepare_system_send(text, lang)
+    observability.note_bot_reply(text)
     if html_text is None:
         await message.reply_text(plain_fallback, **kwargs)
         return
@@ -120,6 +121,7 @@ async def edit_system(target, text: str, lang: str, **kwargs: object) -> None:
     `Message`).
     """
     html_text, plain_fallback = _prepare_system_send(text, lang)
+    observability.note_bot_reply(text)
     if html_text is None:
         await target.edit_message_text(plain_fallback, **kwargs)
         return
@@ -133,6 +135,7 @@ async def edit_system(target, text: str, lang: str, **kwargs: object) -> None:
 async def send_system(bot: "Bot", chat_id: int, text: str, lang: str, **kwargs: object) -> None:
     """Send a standalone [System]-styled message to a chat, with plain-text fallback."""
     html_text, plain_fallback = _prepare_system_send(text, lang)
+    observability.note_bot_reply(text)
     if html_text is None:
         await bot.send_message(chat_id, plain_fallback, **kwargs)
         return

@@ -178,6 +178,14 @@ async def span_for_update(
             name, evt_attrs = _incoming_event(update)
             if evt_attrs:
                 _event(span, name, evt_attrs)
+            # Mirror incoming text as input.value so Phoenix shows it in the
+            # dedicated Input panel and makes it searchable as a span attribute.
+            if update.message and update.message.text:
+                _safe(span.set_attribute, "input.value", _trunc(update.message.text.strip()))
+                _safe(span.set_attribute, "input.mime_type", "text/plain")
+            elif update.callback_query and update.callback_query.data:
+                _safe(span.set_attribute, "input.value", _trunc(update.callback_query.data, 80))
+                _safe(span.set_attribute, "input.mime_type", "text/plain")
             try:
                 yield span
             except Exception as exc:
@@ -228,6 +236,20 @@ def record_outgoing(span: Span | None, text: str, chat_id: int | None = None) ->
     if chat_id is not None:
         attrs["chat_id"] = chat_id
     _event(span, "tg.outgoing", attrs)
+
+
+def note_bot_reply(text: str) -> None:
+    """Set output.value on the active span so Phoenix shows the bot reply in the Output panel.
+
+    Safe to call from anywhere; does nothing when tracing is disabled or no span is active.
+    """
+    try:
+        span = trace.get_current_span()
+        if span and span.is_recording():
+            span.set_attribute("output.value", _trunc(text, 500))
+            span.set_attribute("output.mime_type", "text/plain")
+    except Exception:
+        pass
 
 
 def record_validation_failure(span: Span | None, field: str, reason: str) -> None:
