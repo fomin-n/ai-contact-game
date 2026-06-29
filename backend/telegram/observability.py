@@ -103,15 +103,19 @@ def _user_attrs(update: "Update") -> dict[str, Any]:
     out: dict[str, Any] = {}
     user = update.effective_user
     if user:
-        out["user.id"] = str(user.id)          # Phoenix user-grouping key
-        out["session.id"] = str(user.id)        # Phoenix session-grouping key
+        out["session.id"] = str(user.id)        # stable numeric ID for session grouping
         out["tg.user.id"] = user.id
         username = user.username
-        if isinstance(username, str) and username:
-            out["tg.user.username"] = username
         first = user.first_name if isinstance(user.first_name, str) else ""
         last = user.last_name if isinstance(user.last_name, str) else ""
         display = " ".join(filter(None, [first, last])).strip()
+        if isinstance(username, str) and username:
+            out["tg.user.username"] = username
+            out["user.id"] = f"@{username}"     # human-readable in Phoenix Sessions view
+        elif display:
+            out["user.id"] = display
+        else:
+            out["user.id"] = str(user.id)
         if display:
             out["tg.user.display_name"] = _trunc(display, 100)
         lang_code = user.language_code
@@ -126,10 +130,8 @@ def _user_attrs(update: "Update") -> dict[str, Any]:
 
 
 def _session_attrs(session: "GameSession") -> dict[str, Any]:
+    # session.id / user.id / tg.user.id are already set by _user_attrs when both are called
     return {
-        "session.id": str(session.user_id),
-        "user.id": str(session.user_id),
-        "tg.user.id": session.user_id,
         "game.language": session.language,
         "game.human_role": str(session.human_role),
         "game.bot_state": session.state.name,
