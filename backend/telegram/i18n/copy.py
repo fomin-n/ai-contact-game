@@ -16,7 +16,7 @@ _COPY: dict[str, dict[str, str]] = {
         "daily_game_limit_reached": "You've reached today's limit of {limit} games. Please try again tomorrow.",
         "current_prefix": "Current prefix: {prefix}",
         "wm_guess_prompt": "Your turn, Word Master!\nGuess the encoded word. Prefix: {prefix}",
-        "player_move_step1": "Your turn! Enter your intended word (must start with \"{prefix}\"):",
+        "player_move_step1": "Think of a word starting with \"{prefix}\":",
         "player_move_step2": "Now send your encoded clue. Do not include the word \"{word}\" in the clue:",
         "partner_guess_prompt": "Player B's clue: {clue}\n\nGuess the word Player B encoded (must start with \"{prefix}\"):",
         "word_empty": "Word cannot be empty. Try again:",
@@ -58,7 +58,7 @@ _COPY: dict[str, dict[str, str]] = {
         # Render / pending prompts
         "prompt_clue_label": "Clue",
         "prompt_wm_guess_label": "Guess the encoded word",
-        "prompt_player_move_label": "Send an encoded clue for a word starting with",
+        "prompt_player_move_label": "Think of a word starting with",
         "prompt_partner_guess_label": "Guess the word Player B encoded",
         # Render / game over
         "game_over_stats": "Attempts: {turns}/{max_turns}  ·  Words used: {used}",
@@ -78,7 +78,7 @@ _COPY: dict[str, dict[str, str]] = {
         "daily_game_limit_reached": "Вы достигли сегодняшнего лимита в {limit} игр. Попробуйте снова завтра.",
         "current_prefix": "Текущий префикс: {prefix}",
         "wm_guess_prompt": "Ваш ход, Ведущий!\nУгадайте зашифрованное слово. Префикс: {prefix}",
-        "player_move_step1": "Ваш ход! Введите задуманное слово (должно начинаться с \"{prefix}\"):",
+        "player_move_step1": "Придумайте слово начинающееся с \"{prefix}\":",
         "player_move_step2": "Теперь отправьте зашифрованную подсказку. Не включайте слово \"{word}\" в подсказку:",
         "partner_guess_prompt": "Подсказка Игрока B: {clue}\n\nУгадайте слово, которое задумал Игрок B (должно начинаться с \"{prefix}\"):",
         "word_empty": "Слово не может быть пустым. Попробуйте ещё раз:",
@@ -120,7 +120,7 @@ _COPY: dict[str, dict[str, str]] = {
         # Render / pending prompts
         "prompt_clue_label": "Подсказка",
         "prompt_wm_guess_label": "Угадайте зашифрованное слово",
-        "prompt_player_move_label": "Отправьте зашифрованную подсказку для слова на",
+        "prompt_player_move_label": "Придумайте слово начинающееся с",
         "prompt_partner_guess_label": "Угадайте слово Игрока B",
         # Render / game over
         "game_over_stats": "Попыток: {turns}/{max_turns}  ·  Слов использовано: {used}",

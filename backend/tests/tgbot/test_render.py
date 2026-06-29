@@ -568,6 +568,8 @@ class TestRenderPromptPlayerMove(unittest.TestCase):
         result = render.render_prompt_player_move(state, "en")
         self.assertNotIn("[System]", result)
         self.assertIn("<code>CO</code>", result)
+        self.assertIn("Think of a word", result)
+        self.assertNotIn("clue", result.lower())
 
     def test_russian(self):
         state = _state(currentPrefix="К", language="ru")
@@ -575,6 +577,8 @@ class TestRenderPromptPlayerMove(unittest.TestCase):
         result = render.render_prompt_player_move(state, "ru")
         self.assertNotIn("[Система]", result)
         self.assertIn("<code>К</code>", result)
+        self.assertIn("Придумайте слово", result)
+        self.assertNotIn("подсказку", result)
 
 
 # ---------------------------------------------------------------------------
