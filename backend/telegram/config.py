@@ -56,6 +56,6 @@ class TelegramBotSettings:
                 os.getenv("AI_CONTACT_TELEGRAM_USAGE_DATA_PATH", "data/usage.json")
             ),
             max_games_per_day_per_user=int(
-                os.getenv("AI_CONTACT_TELEGRAM_MAX_GAMES_PER_DAY_PER_USER", "50")
+                os.getenv("AI_CONTACT_TELEGRAM_MAX_GAMES_PER_DAY_PER_USER", "10")
             ),
         )

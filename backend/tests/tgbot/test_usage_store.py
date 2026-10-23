@@ -25,13 +25,13 @@ class UsageStoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_rejects_exactly_at_the_limit(self) -> None:
         store = UsageStore(self.path)
-        for _ in range(3):
-            allowed, _ = await store.record_game_start(1, daily_limit=3)
+        for _ in range(10):
+            allowed, _ = await store.record_game_start(1, daily_limit=10)
             self.assertTrue(allowed)
 
-        allowed, count = await store.record_game_start(1, daily_limit=3)
+        allowed, count = await store.record_game_start(1, daily_limit=10)
         self.assertFalse(allowed)
-        self.assertEqual(count, 3)  # not incremented past the limit
+        self.assertEqual(count, 10)  # not incremented past the limit
 
     async def test_independent_users_have_independent_counters(self) -> None:
         store = UsageStore(self.path)

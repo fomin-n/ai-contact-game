@@ -403,7 +403,7 @@ courtesy for spectators.
 game-start counter to `AI_CONTACT_TELEGRAM_USAGE_DATA_PATH` (default
 `data/usage.json`), mirroring `auth/store.py`'s atomic-write pattern. This is a
 generous abuse guard, not a billing system — the default limit is
-`AI_CONTACT_TELEGRAM_MAX_GAMES_PER_DAY_PER_USER=50`. Enforced at the only two
+`AI_CONTACT_TELEGRAM_MAX_GAMES_PER_DAY_PER_USER=10`. Enforced at the only two
 places `session.start_game(...)` is actually called:
 `callbacks.py::_handle_role` (playerA/none) and
 `messages.py::_handle_entering_secret` (wordMaster). On limit hit, the user
